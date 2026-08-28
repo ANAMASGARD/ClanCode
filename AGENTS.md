@@ -67,8 +67,16 @@ Use the existing structure instead of creating parallel implementations.
 ```
 /
 ├── app/                         # Next.js web application
-├── public/                      # Static assets
-├── memory/                      # Project-local durable context when applicable
+├── public/                      # Web-only static assets
+│   ├── assets/                  # Kenney 3D kits
+│   │   ├── kenney_fantasy-town-kit_2.0/
+│   │   ├── kenney_nature-kit/
+│   │   ├── kenney_pirate-kit/
+│   │   └── kenney_survival-kit/
+│   ├── audio/                   # Theme music and interaction SFX
+│   └── fonts/                   # Clash Display HUD/branding fonts
+├── memory/                      # Project-local durable context and catalogs
+│   └── visualization-assets.md  # Kenney/font/audio inventory
 ├── clan-cli/                    # Independent nested Bun workspace
 │   ├── packages/
 │   │   ├── cli/                 # @clanofagents/cli: execution + TUI
@@ -202,7 +210,12 @@ When working in a nested package, inspect that package's own `package.json` befo
   `bun run dev` or `bun run typecheck`.
 - Keep the root and nested workspace lockfiles independent until a deliberate
   workspace-unification decision is made.
+- The root `tsconfig.json` intentionally excludes `clan-cli`; validate the
+  nested workspace with its own TypeScript configuration.
 - Do not add npm, Yarn, or pnpm lockfiles to either package root.
+- Install browser visualization dependencies (`three`, React Three Fiber,
+  Drei, GSAP, and Framer Motion) only in the root Next.js package. Do not add
+  them to `clan-cli/`.
 
 ## 7. TypeScript Rules
 
@@ -241,6 +254,27 @@ Do not let animation state determine:
 - whether approval was granted.
 
 Those facts must come from the domain/run state.
+
+The web visualization asset rules are:
+
+- Kenney kits are loaded only by client-side web visualization modules from
+  `public/assets/`; never copy them into `app/` or `clan-cli/`.
+- Use `app/lib/visualization/kenney.ts` for Kenney public URLs. Do not scatter
+  `/assets/kenney_...` strings or construct generic asset registries in UI
+  components.
+- Use Clash Display from `public/fonts/` for the web HUD and branding when
+  typography is wired. Font selection is presentation only.
+- Use `app/lib/visualization/audio.ts` for `public/audio/` theme and click/select
+  feedback. Do not construct independent `Audio` objects in random components.
+- The theme may loop only after a user gesture or while muted when browser
+  autoplay policy blocks sound. Provide an accessible mute/unmute control and
+  treat playback failure as non-fatal.
+- GSAP owns 3D scene/object timelines; Framer Motion owns 2D HUD transitions.
+  Do not use either library, React Three Fiber state, model-loading state, or
+  audio state to authorize tools, grant approvals, or invent task, test, Git,
+  or pull-request results.
+- Lazy-load the future 3D canvas and retain a useful non-WebGL/non-audio
+  fallback. Do not re-render the full scene for every streamed token/event.
 
 ## 9. CLI Rules
 

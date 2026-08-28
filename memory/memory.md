@@ -118,18 +118,40 @@ Both use `bun run --watch` on `main.tsx`.
 
 ---
 
-## Web App — Current State (brief)
+## Web App — Current State
 
-Next.js app from Create Next App scaffold under `app/`. Game/clan visualization and control-plane APIs are not yet implemented in depth.
+Next.js app from the Create Next App scaffold under `app/`. Game/clan
+visualization and control-plane APIs are not yet implemented in depth.
+
+### Visualization foundation
+
+- Canonical asset inventory: [`memory/visualization-assets.md`](visualization-assets.md).
+- Kenney kits are under `public/assets/`: Fantasy Town 2.0, Nature 2.1,
+  Pirate 2.1, and Survival 2.0.
+- Clash Display font files are under `public/fonts/`.
+- The main theme and click/select feedback are under `public/audio/`.
+- `app/lib/visualization/kenney.ts` owns typed Kenney public URLs.
+- `app/lib/visualization/audio.ts` owns typed audio URLs and the client
+  controller for looping theme, mute state, and click feedback.
+- The Next.js root now includes `three@0.185.1`,
+  `@react-three/fiber@9.7.0`, `@react-three/drei@10.7.8`,
+  `gsap@3.15.0`, `framer-motion@13.1.1`, and
+  `@types/three@0.185.4`.
+- Root `tsconfig.json` excludes `clan-cli`; the nested CLI workspace remains
+  independently typechecked.
+- No 3D scene, HUD mute control, loader integration, or physics world exists
+  yet. WebGL/audio failure must remain non-fatal when these are built.
 
 ---
 
-## Other Untracked / WIP Paths
+## Other WIP Paths
 
 | Path | Notes |
 |------|-------|
 | `clan-cli/` | CLI scaffold and nested Bun workspace (see above) |
-| `memory/` | This file; project-local durable context |
+| `memory/` | Project-local durable context and asset catalog |
+| `public/assets/` | Four Kenney CC0 kit trees; binary assets intentionally kept separate from docs/helper changes |
+| `public/audio/` | `Clan Code - Main Theme.m4a` and `click-003.mp3` |
 | `public/fonts/` | `Clash_Bold.otf.ttf`, `Clash_Regular.otf.ttf` — brand fonts for web UI |
 
 ---

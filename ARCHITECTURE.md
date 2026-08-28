@@ -98,8 +98,17 @@ The repository is intentionally split by responsibility.
 ```
 /
 ├── app/                         # Next.js application routes and UI
-├── public/                      # Static web assets
-├── memory/                      # Project-local durable context when applicable
+├── public/                      # Web-only static visualization assets
+│   ├── assets/
+│   │   ├── kenney_fantasy-town-kit_2.0/
+│   │   ├── kenney_nature-kit/
+│   │   ├── kenney_pirate-kit/
+│   │   └── kenney_survival-kit/
+│   ├── audio/                  # Theme music and interaction SFX
+│   └── fonts/                  # Clash Display HUD/branding fonts
+├── memory/                      # Project-local durable context and catalogs
+│   ├── memory.md
+│   └── visualization-assets.md  # Kenney/font/audio inventory
 ├── clan-cli/                    # Independent nested Bun workspace
 │   ├── packages/
 │   │   ├── cli/                 # @clanofagents/cli: local execution + TUI
@@ -122,6 +131,14 @@ The repository is intentionally split by responsibility.
 The web application and `clan-cli` are currently separate Bun package roots with
 separate dependency installation and lockfile boundaries. The root package does
 not implicitly own or execute the nested CLI workspace.
+The root TypeScript project also excludes `clan-cli`; the nested package owns
+its own TypeScript configuration and validation.
+
+The `public/assets/`, `public/audio/`, and `public/fonts/` trees belong to the
+Next.js web visualization layer. They are not CLI dependencies and must not be
+copied into `clan-cli/`. The canonical inventory and kit-to-domain mapping live
+in [`memory/visualization-assets.md`](memory/visualization-assets.md), rather
+than in this stable contract.
 
 ### 4.1. Package and Workspace Naming
 
@@ -546,6 +563,47 @@ Visual state is derived from domain state and run events.
 
 Never encode task correctness, permissions, or execution control only inside animation/game components.
 
+### 17.1. Visualization Assets, Motion, and Audio
+
+The current web visualization stack is:
+
+- `three` for the WebGL scene runtime;
+- `@react-three/fiber` for declarative React-to-Three composition;
+- `@react-three/drei` for Three.js helpers and loaders;
+- `gsap` for 3D scene and object timelines;
+- `framer-motion` for 2D HUD and interface transitions.
+
+These dependencies belong only to the root Next.js package. The CLI has its own
+OpenTUI presentation stack and must not import browser rendering or audio
+dependencies.
+
+Kenney models are served from `public/assets/` and loaded through the typed
+[`app/lib/visualization/kenney.ts`](app/lib/visualization/kenney.ts) URL
+boundary. The current packs contain OBJ/MTL assets and, for some packs, FBX
+assets; they do not provide a GLB/GLTF runtime catalog. `Overview.html` files
+and `Previews/` images are human reference material, not scene model sources.
+The full inventory is maintained in
+[`memory/visualization-assets.md`](memory/visualization-assets.md).
+
+Clash Display files under `public/fonts/` are reserved for web HUD and branding
+typography. Theme music and click/select feedback under `public/audio/` are
+reserved for the web HUD and are managed through
+[`app/lib/visualization/audio.ts`](app/lib/visualization/audio.ts). The theme
+may loop only when browser playback policy permits it, and users must have an
+accessible mute/unmute control. Click audio is best-effort feedback and must
+not block or change a domain action when playback fails.
+
+The 3D canvas and audio are optional presentation surfaces. Lazy-load the
+canvas, provide a useful non-WebGL fallback, and keep core task/run information
+usable when rendering or audio is unavailable. GSAP, Framer Motion, React Three
+Fiber state, model loading state, and audio mute state must never authorize a
+tool, grant approval, declare validation success, or imply that a branch or PR
+exists.
+
+Physics is a future optional adapter, not part of the current asset stack.
+Physics collisions and simulation state must remain separate from domain/run
+state and policy decisions.
+
 ## 18. Failure and Cancellation
 
 Every run must have a safe failure path.
@@ -674,10 +732,12 @@ and other volatile project status belong in
 [`memory/memory.md`](memory/memory.md).
 
 At the current baseline, `clan-cli` contains an OpenTUI/React presentation
-scaffold and thin command-routing placeholder. Device pairing, repository
-validation, policy enforcement, TrueForge integration, safe execution tools,
-structured transport, worktree isolation, and GitHub delivery are not yet
-implemented.
+scaffold and thin command-routing placeholder. The web app has a catalog for
+the Kenney/font/audio assets, typed visualization URL/audio boundaries, and the
+root 3D dependency stack, but no village scene or HUD wiring yet. Device
+pairing, repository validation, policy enforcement, TrueForge integration, safe
+execution tools, structured transport, worktree isolation, and GitHub delivery
+are not yet implemented.
 
 Update `ARCHITECTURE.md` only when a fundamental boundary or execution model
 changes. Update `memory/memory.md` when implementation milestones change.
