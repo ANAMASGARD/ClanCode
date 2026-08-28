@@ -66,16 +66,30 @@ Use the existing structure instead of creating parallel implementations.
 
 ```
 /
-├── app/                    # Next.js web application
-├── public/                 # Static assets
-├── memory/                 # Project-local durable context when applicable
-├── clan-cli/
-│   └── packages/
-│       └── cli/            # Local CLI / execution plane
+├── app/                         # Next.js web application
+├── public/                      # Static assets
+├── memory/                      # Project-local durable context when applicable
+├── clan-cli/                    # Independent nested Bun workspace
+│   ├── packages/
+│   │   ├── cli/                 # @clanofagents/cli: execution + TUI
+│   │   │   └── src/
+│   │   │       ├── main.tsx     # CLI bootstrap
+│   │   │       ├── app/         # TUI composition
+│   │   │       ├── components/  # Presentation-only TUI components
+│   │   │       └── commands/    # Thin command routing
+│   │   └── protocol/            # Planned shared RunEvent contracts
+│   ├── package.json
+│   ├── bun.lock
+│   └── tsconfig.base.json
 ├── AGENTS.md
 ├── ARCHITECTURE.md
-└── package.json
+├── package.json                 # Next.js web application package
+└── bun.lock                     # Web application lockfile
 ```
+
+The web application and `clan-cli` currently have separate Bun package roots,
+dependency installation, and lockfiles. Do not assume that a dependency or
+script available in one root is available in the other.
 
 **Ownership rule**
 
@@ -102,6 +116,16 @@ Use the existing structure instead of creating parallel implementations.
 - test/build execution;
 - approval enforcement;
 - branch/commit/push/PR execution.
+
+Within `clan-cli/`, keep these boundaries explicit:
+
+- `src/main.tsx` contains bootstrap only.
+- `src/app/` composes the terminal UI.
+- `src/components/` contains presentation-only TUI components.
+- `src/commands/` performs thin argument routing and delegates to execution
+  services; it must not bypass policy or create a hidden agent loop.
+- Future supervisor, policy, tool, and repository modules own execution concerns,
+  not the TUI.
 
 Do not duplicate the same responsibility in both places.
 
@@ -168,6 +192,18 @@ State:
 
 When working in a nested package, inspect that package's own `package.json` before running commands.
 
+### 6.1. Package Roots and Commands
+
+- Run web commands from the repository root, such as `bun install` and
+  `bun run dev`.
+- Run CLI workspace commands from `clan-cli/`, such as `bun install` and
+  `bun run dev:clan`.
+- Run package-local commands from `clan-cli/packages/cli/`, such as
+  `bun run dev` or `bun run typecheck`.
+- Keep the root and nested workspace lockfiles independent until a deliberate
+  workspace-unification decision is made.
+- Do not add npm, Yarn, or pnpm lockfiles to either package root.
+
 ## 7. TypeScript Rules
 
 - Prefer strict, explicit types at system boundaries.
@@ -224,6 +260,21 @@ For code under `clan-cli/`:
 - Preserve a recoverable repository state after failure.
 
 A model requesting an action is **not** authorization to perform it.
+
+### 9.1. CLI TUI Rules
+
+- OpenTUI/React is a presentation layer. Components render domain state and
+  structured run events; they do not become an execution authority.
+- Keep `src/main.tsx` limited to renderer/bootstrap wiring.
+- Keep `src/app/` focused on TUI composition and screen-level presentation.
+- Keep `src/components/` free of filesystem access, shell execution, Git
+  mutations, policy decisions, and TrueForge orchestration.
+- User actions from the TUI must become explicit intents handled by the
+  supervisor; visual state cannot authorize a tool or declare a run successful.
+- Do not push high-frequency token/event updates through a full-scene rerender
+  when a smaller state projection is sufficient.
+- Swapping OpenTUI or another terminal UI library must not require moving
+  execution logic into the presentation layer.
 
 ## 10. TrueForge Integration Rules
 
@@ -465,6 +516,16 @@ If implementation genuinely requires changing an architectural invariant:
 - explain why;
 - update architecture and implementation together;
 - treat the change as architecture-level review.
+
+### 22.1. Durable Project Memory
+
+- Keep volatile implementation status, scaffold milestones, and current
+  limitations in `memory/memory.md`.
+- Update `memory/memory.md` when the CLI or web scaffold changes materially.
+- Do not duplicate volatile status in the stable invariant sections of
+  `ARCHITECTURE.md`.
+- Keep memory factual and current; do not treat it as an authorization,
+  execution, or policy source.
 
 ## 23. Definition of Done
 

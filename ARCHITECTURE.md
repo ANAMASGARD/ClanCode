@@ -97,29 +97,49 @@ The repository is intentionally split by responsibility.
 
 ```
 /
-├── app/                    # Next.js application routes and UI
-├── public/                 # Static web assets
-├── memory/                 # Project-local durable context when applicable
-├── clan-cli/
+├── app/                         # Next.js application routes and UI
+├── public/                      # Static web assets
+├── memory/                      # Project-local durable context when applicable
+├── clan-cli/                    # Independent nested Bun workspace
 │   ├── packages/
-│   │   └── cli/            # Local execution CLI
-│   │       └── src/
-│   │           └── components/
-│   ├── package.json
-│   ├── bun.lock
-│   └── tsconfig.base.json
-├── AGENTS.md               # Rules for development AI agents
-├── ARCHITECTURE.md         # This architecture contract
-├── package.json            # Web/root workspace package
-├── bun.lock
+│   │   ├── cli/                 # @clanofagents/cli: local execution + TUI
+│   │   │   └── src/
+│   │   │       ├── main.tsx     # CLI bootstrap
+│   │   │       ├── app/         # TUI composition
+│   │   │       ├── components/  # Presentation-only TUI components
+│   │   │       └── commands/    # Thin command routing
+│   │   └── protocol/            # Planned shared RunEvent contracts
+│   ├── package.json             # CLI workspace manifest
+│   ├── bun.lock                 # CLI workspace lockfile
+│   └── tsconfig.base.json       # CLI workspace TypeScript config
+├── AGENTS.md                    # Rules for development AI agents
+├── ARCHITECTURE.md              # This architecture contract
+├── package.json                 # Next.js web application package
+├── bun.lock                     # Web application lockfile
 └── tsconfig.json
 ```
+
+The web application and `clan-cli` are currently separate Bun package roots with
+separate dependency installation and lockfile boundaries. The root package does
+not implicitly own or execute the nested CLI workspace.
+
+### 4.1. Package and Workspace Naming
+
+- Product brand: **Clan Code**.
+- Web application package: `clanofagents`.
+- CLI package scope: `@clanofagents/*`.
+- Local CLI package: `@clanofagents/cli`.
+- Intended published CLI binary: `clan` when a publishable CLI entrypoint is added.
+- `packages/protocol` is the planned home for dependency-light contracts shared by
+  the web application and CLI. It must not import either implementation.
 
 **Boundary rule**
 
 - Code that needs browser/UI concerns belongs in the web application.
 - Code that needs filesystem, shell, Git, local credentials, or repository execution belongs in the CLI.
 - Shared data contracts should be dependency-light and must never import web or CLI implementation code.
+- The nested CLI workspace must not be treated as a second web application or a
+  reason to duplicate control-plane responsibilities.
 - Do not move local execution into server routes or server actions.
 
 ## 5. Web Control Plane
@@ -171,6 +191,43 @@ Its responsibilities are:
 - Never execute an irreversible command merely because a model requested it.
 - Never push directly to the protected/default branch.
 - Never merge a pull request automatically.
+
+### 6.1. CLI Internal Layers
+
+The local CLI has a presentation layer and an execution layer. They communicate
+through explicit domain state and structured events; the presentation layer is
+never an authorization boundary.
+
+```mermaid
+flowchart TB
+  subgraph cli [LocalCLI]
+    TUI[Presentation_OpenTUI]
+    Supervisor[RunSupervisor]
+    TrueForge[TrueForgeRuntime]
+    Tools[SafeTools_FS_Shell_Git]
+  end
+  Web[WebControlPlane] <-->|"commands and RunEvent stream"| Supervisor
+  Supervisor -->|"domain and run events"| TUI
+  TUI -->|"user intents and approvals"| Supervisor
+  Supervisor --> TrueForge
+  TrueForge --> Tools
+  Tools --> Repo[LocalRepository]
+```
+
+- **Presentation (`OpenTUI`/React):** Renders status, approvals, and run
+  timelines from domain state and events. It may submit user intents, but it
+  cannot authorize tools, mutate Git state, or decide whether a run succeeded.
+- **Run supervisor:** Owns device pairing, repository resolution, run lifecycle,
+  policy evaluation, cancellation, approval coordination, and event emission.
+- **TrueForge runtime:** Owns the runtime agent loop and receives typed context,
+  tools, policy, limits, and event sinks through a thin adapter.
+- **Safe tools:** Implement filesystem, process, test, build, and Git operations
+  behind repository boundaries and risk classification.
+
+`OpenTUI` is the CLI presentation stack, analogous to the web application's
+Next.js presentation stack. Replacing the TUI library must not move execution,
+policy, or repository access into UI components. The current scaffold implements
+only the presentation/bootstrap portion; the execution layers remain planned.
 
 ## 7. TrueForge Runtime Boundary
 
@@ -608,3 +665,19 @@ The following sentence is the shortest version of this document:
 > The web app expresses intent and visualizes state; the paired local CLI executes inside an approved repository; TrueForge runs the agents; policy gates their tools; risky actions require a human; and code reaches the default branch only through a reviewed pull request.
 
 That contract should remain true even as models, UI libraries, storage providers, transports, and individual features change.
+
+## 26. Implementation Baseline
+
+This document defines stable system, trust, and execution boundaries; it is not a
+feature-by-feature implementation ledger. The current implementation baseline
+and other volatile project status belong in
+[`memory/memory.md`](memory/memory.md).
+
+At the current baseline, `clan-cli` contains an OpenTUI/React presentation
+scaffold and thin command-routing placeholder. Device pairing, repository
+validation, policy enforcement, TrueForge integration, safe execution tools,
+structured transport, worktree isolation, and GitHub delivery are not yet
+implemented.
+
+Update `ARCHITECTURE.md` only when a fundamental boundary or execution model
+changes. Update `memory/memory.md` when implementation milestones change.
