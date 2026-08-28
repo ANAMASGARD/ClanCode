@@ -490,7 +490,7 @@ If a remote vector store such as Pinecone is used:
 Separate these concepts:
 
 **User authentication**  
-Answers: Who is using Clan Code?
+Answers: Who is using Clan Code? The web control plane uses Clerk. `/` is public; `/dashboard` and later control-plane routes require a signed-in user. Clerk identity is not GitHub authorization, device pairing, or runtime tool permission.
 
 **GitHub authorization**  
 Answers: Which GitHub resources may Clan Code access?

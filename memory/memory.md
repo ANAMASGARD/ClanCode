@@ -1,6 +1,6 @@
 # Clan Code — Project Memory
 
-Last updated: 2026-08-28
+Last updated: 2026-08-28 (Clerk + Neon/Drizzle foundation committed)
 
 ## What This Repo Is
 
@@ -123,6 +123,39 @@ Both use `bun run --watch` on `main.tsx`.
 Next.js app from the Create Next App scaffold under `app/`. Game/clan
 visualization and control-plane APIs are not yet implemented in depth.
 
+### Clerk user authentication
+
+- Web user auth is Clerk (`@clerk/nextjs`) in the Next.js control plane.
+- `/` is public: a blank landing with a Dashboard button only. No always-visible
+  sign-in/up chrome.
+- Unsigned Dashboard clicks open a Clerk sign-in/sign-up modal over a blurred,
+  transparent landing overlay. Clicking the blur (or Escape) closes it.
+  After a successful sign-in or sign-up, the user is sent to `/dashboard`.
+- `/dashboard` is protected. Unauthenticated visits redirect to `/?auth=1`,
+  which reopens the same landing modal.
+- Dashboard is currently a blank “Coming soon” page with a `UserButton`.
+- `proxy.ts` matcher includes `'/(api|trpc)(.*)'` and `'/__clerk/:path*'`.
+- Clerk secrets live in `.env.local` (gitignored). Do not log or commit them.
+
+### Neon PostgreSQL + Drizzle (web control plane only)
+
+- **Clerk** is the only user authentication layer. **Neon is database only** — no Neon
+  Auth product, no Neon-managed sign-in, no auth env vars from Neon.
+- Hosted persistence uses **Neon PostgreSQL + Drizzle ORM** (`DATABASE_URL`).
+- Code: `app/lib/db/` (`getDb()`), schema barrel, migrations in `drizzle/`.
+- Neon CLI (`neon` devDependency) links the repo and pulls postgres env only:
+  - `neon:login` — Neon **CLI** sign-in (developer tool, not app auth)
+  - `neon:setup` — link project `flat-resonance-41016361` + pull postgres env
+  - `neon:env` — refresh DB vars in `.env.local` (preserves Clerk keys)
+  - `db:check` — verify Drizzle can query Neon
+- Linked context: `.neon` (org/project/branch). `db:generate`, `db:migrate`,
+  `db:studio` for schema work.
+- `clan-cli` / TrueForge keeps its own local SQLite — do not add Drizzle/Neon there.
+- No domain tables yet (islands, buildings, tasks, runs). Schema comes next.
+- **Verified locally:** `bun run db:check` succeeds against Neon project
+  `flat-resonance-41016361` (`production` branch). `.neon` context is gitignored;
+  secrets stay in `.env.local` only.
+
 ### Visualization foundation
 
 - Canonical asset inventory: [`memory/visualization-assets.md`](visualization-assets.md).
@@ -150,9 +183,11 @@ visualization and control-plane APIs are not yet implemented in depth.
 |------|-------|
 | `clan-cli/` | CLI scaffold and nested Bun workspace (see above) |
 | `memory/` | Project-local durable context and asset catalog |
-| `public/assets/` | Four Kenney CC0 kit trees; binary assets intentionally kept separate from docs/helper changes |
+| `public/assets/` | Four Kenney CC0 kit trees (Fantasy Town, Nature, Pirate, Survival) |
 | `public/audio/` | `Clan Code - Main Theme.m4a` and `click-003.mp3` |
-| `public/fonts/` | `Clash_Bold.otf.ttf`, `Clash_Regular.otf.ttf` — brand fonts for web UI |
+| `public/fonts/` | `Clash_Bold.otf.ttf`, `Clash_Regular.otf.ttf` — brand fonts for web HUD |
+| `.env.example` | Documents Clerk keys + `DATABASE_URL` (no secrets) |
+| `scripts/` | `db-check.ts`, `db-migrate.ts` for Drizzle/Neon |
 
 ---
 
