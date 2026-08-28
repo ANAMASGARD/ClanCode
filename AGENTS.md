@@ -625,6 +625,14 @@ correctness
 
 The project succeeds when agents can act usefully, visibly, and safely—not when they are given the most autonomy.
 
+## 27. Agent skills
+
+Engineering skills (`to-spec`, `to-tickets`, triage) use this repo's tracker and vocabulary:
+
+- [Issue tracker](./docs/agents/issue-tracker.md)
+- [Domain docs](./docs/agents/domain.md)
+- [Triage labels](./docs/agents/triage-labels.md)
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know
