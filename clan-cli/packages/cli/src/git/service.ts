@@ -1,5 +1,6 @@
 import type { RepositoryContext } from "../repository/repository.ts";
 import { evaluateCommand, runCommand, sanitizeEnv } from "../process/runner.ts";
+import { isSecretPath } from "../tools/types.ts";
 
 export type PullRequestResult = {
   number: number;
@@ -21,6 +22,21 @@ export type GitService = {
     head: string;
   }): Promise<PullRequestResult>;
 };
+
+function porcelainPaths(output: string): string[] {
+  const paths: string[] = [];
+  for (const line of output.split("\n")) {
+    if (line.length < 4) {
+      continue;
+    }
+    const rest = line.slice(3);
+    const path = rest.includes(" -> ") ? (rest.split(" -> ").at(-1) ?? rest) : rest;
+    if (path.length > 0) {
+      paths.push(path);
+    }
+  }
+  return paths;
+}
 
 export function assertTaskBranch(
   branch: string,
@@ -72,9 +88,23 @@ export function createGitService(): GitService {
       return result.stdout;
     },
     async commit(cwd, message) {
+      const status = await runCommand({
+        command: "git",
+        args: ["status", "--porcelain", "--untracked-files=all"],
+        cwd,
+        timeoutMs: 10_000,
+        maxStdoutBytes: 64_000,
+        maxStderrBytes: 4_096,
+        env: sanitizeEnv(undefined),
+        authorizedRoot: cwd,
+      });
+      const toStage = porcelainPaths(status.stdout).filter((path) => !isSecretPath(path));
+      if (toStage.length === 0) {
+        throw new Error("Nothing to commit after excluding protected paths");
+      }
       await runCommand({
         command: "git",
-        args: ["add", "-A"],
+        args: ["add", "--", ...toStage],
         cwd,
         timeoutMs: 15_000,
         maxStdoutBytes: 16_000,

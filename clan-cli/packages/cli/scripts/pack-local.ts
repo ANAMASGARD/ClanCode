@@ -83,10 +83,6 @@ async function main(): Promise<void> {
     stdout: "inherit",
     stderr: "inherit",
   });
-    cwd: installDir,
-    stdout: "inherit",
-    stderr: "inherit",
-  });
   if (install.exitCode !== 0) {
     throw new Error("clean install of packed tarball failed");
   }

@@ -45,7 +45,9 @@ export async function runCli(argv: readonly string[]): Promise<number> {
         console.log(supervisor.lastModelText);
       }
       if (supervisor.status() === "awaiting_approval") {
-        console.error("Run paused for approval. Use interactive `clancode` to approve or deny.");
+        console.error(
+          "Run paused for approval. Start interactive `clancode`, then /resume and /approve or /deny.",
+        );
         return 3;
       }
       return supervisor.status() === "failed" ? 1 : 0;

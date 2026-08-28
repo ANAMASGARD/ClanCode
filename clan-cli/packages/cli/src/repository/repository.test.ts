@@ -72,6 +72,14 @@ describe("repository boundary", () => {
     );
   });
 
+  test("allows nested create paths inside the repo", async () => {
+    const root = await makeRepo();
+    roots.push(root);
+    const repo = await resolveRepository(root);
+    const nested = await resolveWithinRepo(repo, "src/new/deep/file.ts");
+    expect(nested.endsWith("src/new/deep/file.ts")).toBe(true);
+  });
+
   test("detects dirty repo without mutating it", async () => {
     const root = await makeRepo();
     roots.push(root);

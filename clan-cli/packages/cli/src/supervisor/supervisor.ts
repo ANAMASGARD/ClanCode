@@ -1,4 +1,14 @@
-import { TrueForge, type TrueForgeApi } from "@truefoundry/trueforge-sdk";
+import {
+  cancelSession,
+  createAgentClient,
+  createInlineSession,
+  getSession,
+  listModelNames,
+  registerLoopbackMcp,
+  streamTurn,
+  type TrueforgeAgentClient,
+  type TurnStreamingEvent,
+} from "../trueforge/agent.ts";
 import {
   createRunEvent,
   type RunEvent,
@@ -30,8 +40,6 @@ import {
   type SessionMapping,
 } from "../session/store.ts";
 import { runCommand, sanitizeEnv } from "../process/runner.ts";
-
-type TurnStreamingEvent = TrueForgeApi.TurnStreamingEvent;
 
 export type RunStatus =
   | "idle"
@@ -70,7 +78,7 @@ export class RunSupervisor {
   #listeners = new Set<Listener>();
   #config: TrueforgeConfig;
   #handle: TrueforgeRuntimeHandle | undefined;
-  #client: TrueForge | undefined;
+  #client: TrueforgeAgentClient | undefined;
   #cleaned = false;
   #abort = new AbortController();
   repo: RepositoryContext | undefined;
@@ -147,10 +155,7 @@ export class RunSupervisor {
       this.repo = this.primaryRepo;
       assertNodeRuntime(this.#config.nodeBin);
       this.#handle = await ensureRuntime(this.#config, this.#abort.signal);
-      this.#client = new TrueForge({
-        baseUrl: this.#config.baseUrl,
-        timeoutInSeconds: this.#config.sdkTimeoutSeconds,
-      });
+      this.#client = createAgentClient(this.#config);
       this.#mcp = startLoopbackMcp(() => this.#toolContext());
       this.#setStatus("ready");
       this.#emit("run.started", {
@@ -183,16 +188,17 @@ export class RunSupervisor {
     }
     this.#setStatus("cancelling");
     this.#abort.abort();
-    if (this.sessionId !== undefined && this.#client !== undefined) {
+    const sessionId = this.sessionId;
+    if (sessionId !== undefined && this.#client !== undefined) {
       try {
-        await this.#client.sessions.cancel(this.sessionId);
+        await cancelSession(this.#client, sessionId);
       } catch {
         // Best-effort; local cleanup still runs.
       }
     }
     await this.#cleanup();
     this.#setStatus("stopped");
-    this.#emit("run.cancelled", { sessionId: this.sessionId });
+    this.#emit("run.cancelled", { sessionId });
   }
 
   async #cleanup(): Promise<void> {
@@ -200,6 +206,8 @@ export class RunSupervisor {
       return;
     }
     this.#cleaned = true;
+    this.sessionId = undefined;
+    this.pendingApprovals = [];
     this.#mcp?.close();
     this.#mcp = undefined;
     if (this.#handle !== undefined) {
@@ -207,20 +215,20 @@ export class RunSupervisor {
     }
   }
 
-  async #ensureClient(): Promise<TrueForge> {
+  async #ensureClient(): Promise<TrueforgeAgentClient> {
     if (this.#client === undefined) {
       throw new Error("Supervisor is not ready");
     }
     return this.#client;
   }
 
-  async #selectModel(client: TrueForge): Promise<string> {
+  async #selectModel(client: TrueforgeAgentClient): Promise<string> {
     const configured = process.env.CLAN_TRUEFORGE_MODEL;
     if (configured !== undefined && configured.length > 0) {
       return configured;
     }
-    const listed = await client.models.list();
-    const first = listed.data[0]?.name;
+    const names = await listModelNames(client);
+    const first = names[0];
     if (first === undefined) {
       throw new Error(
         "No TrueForge model is configured. Open the TrueForge UI and add a model provider, or set CLAN_TRUEFORGE_MODEL.",
@@ -229,18 +237,11 @@ export class RunSupervisor {
     return first;
   }
 
-  async #ensureMcpRegistered(client: TrueForge): Promise<void> {
+  async #ensureMcpRegistered(client: TrueforgeAgentClient): Promise<void> {
     if (this.#mcp === undefined) {
       return;
     }
-    await client.settings.mcpServers.createOrUpdate({
-      manifest: {
-        description: "Clan Code local repository tools",
-        name: "clancode-local",
-        type: "remote",
-        url: this.#mcp.url,
-      },
-    });
+    await registerLoopbackMcp(client, this.#mcp.url);
   }
 
   #agentInstructions(): string {
@@ -260,43 +261,18 @@ export class RunSupervisor {
     this.#setStatus("creating_session");
     this.modelName = await this.#selectModel(client);
     await this.#ensureMcpRegistered(client);
-    const created = await client.sessions.create({
-      agent: {
-        spec: {
-          instructions: this.#agentInstructions(),
-          model: { name: this.modelName },
-          mcpServers: [
-            {
-              name: "clancode-local",
-              enableTools: this.mode === "plan" ? [...PLAN_TOOL_NAMES] : ["@all"],
-              requireApprovalForTools:
-                this.mode === "plan"
-                  ? ["@write", "@destructive"]
-                  : ["@write", "@destructive", "delete_file", "run_command"],
-            },
-          ],
-        },
-      },
+    this.sessionId = await createInlineSession(client, {
+      instructions: this.#agentInstructions(),
+      model: this.modelName,
+      enableTools: this.mode === "plan" ? [...PLAN_TOOL_NAMES] : ["@all"],
+      requireApprovalForTools:
+        this.mode === "plan"
+          ? ["@write", "@destructive"]
+          : ["@write", "@destructive", "delete_file", "run_command"],
     });
-    this.sessionId = created.data.id;
     this.#emit("session.created", { sessionId: this.sessionId, model: this.modelName });
     this.#emit("agent.started", { sessionId: this.sessionId });
-    if (this.repo !== undefined) {
-      const key = sessionKey({
-        repositoryIdentity: this.repo.identity,
-        agentProfile: this.mode,
-        model: this.modelName,
-      });
-      await saveMapping({
-        key,
-        repositoryIdentity: this.repo.identity,
-        agentProfile: this.mode,
-        model: this.modelName,
-        trueforgeSessionId: this.sessionId,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-    }
+    await this.#persistSession();
     this.#setStatus("ready");
     return this.sessionId;
   }
@@ -307,9 +283,9 @@ export class RunSupervisor {
     this.#setStatus("streaming");
     this.#emit("turn.started", { sessionId });
     this.lastModelText = "";
-    const stream = await client.sessions.createTurnStream(sessionId, {
-      input: [{ type: "user.message", content: text }],
-    });
+    const stream = await streamTurn(client, sessionId, [
+      { type: "user.message", content: text },
+    ]);
     await this.#consumeStream(stream);
   }
 
@@ -324,6 +300,7 @@ export class RunSupervisor {
         await this.#mapTrueforgeEvent(event);
         if (event.type === "tool.approval_required") {
           this.#setStatus("awaiting_approval");
+          await this.#persistSession();
           return;
         }
         if (event.type === "tool.response_required") {
@@ -452,16 +429,14 @@ export class RunSupervisor {
       } else {
         this.#emit("tool.completed", { toolCallId: call.id, data: result.data });
       }
-      const stream = await client.sessions.createTurnStream(this.sessionId, {
-        input: [
-          {
-            type: "user.tool_response",
-            threadId: event.threadId,
-            toolCallId: call.id,
-            content: JSON.stringify(result),
-          },
-        ],
-      });
+      const stream = await streamTurn(client, this.sessionId, [
+        {
+          type: "user.tool_response",
+          threadId: event.threadId,
+          toolCallId: call.id,
+          content: JSON.stringify(result),
+        },
+      ]);
       await this.#consumeStream(stream);
     }
   }
@@ -474,20 +449,19 @@ export class RunSupervisor {
     }
     const remaining = this.pendingApprovals.slice(1);
     this.pendingApprovals = remaining;
+    await this.#persistSession();
     if (!allow) {
       this.#emit("approval.denied", pending);
       this.#deleteApproved = false;
       this.#commandApproved = false;
-      const stream = await client.sessions.createTurnStream(this.sessionId, {
-        input: [
-          {
-            type: "user.tool_approval",
-            threadId: pending.threadId,
-            toolCallId: pending.toolCallId,
-            approval: { status: "deny", reason: "Denied by Clan Code policy" },
-          },
-        ],
-      });
+      const stream = await streamTurn(client, this.sessionId, [
+        {
+          type: "user.tool_approval",
+          threadId: pending.threadId,
+          toolCallId: pending.toolCallId,
+          approval: { status: "deny", reason: "Denied by Clan Code policy" },
+        },
+      ]);
       this.#setStatus("streaming");
       await this.#consumeStream(stream);
       return;
@@ -495,16 +469,14 @@ export class RunSupervisor {
     this.#deleteApproved = pending.toolName === "delete_file" || pending.toolName.includes("delete");
     this.#commandApproved = pending.toolName === "run_command";
     this.#emit("approval.granted", pending);
-    const stream = await client.sessions.createTurnStream(this.sessionId, {
-      input: [
-        {
-          type: "user.tool_approval",
-          threadId: pending.threadId,
-          toolCallId: pending.toolCallId,
-          approval: { status: "allow" },
-        },
-      ],
-    });
+    const stream = await streamTurn(client, this.sessionId, [
+      {
+        type: "user.tool_approval",
+        threadId: pending.threadId,
+        toolCallId: pending.toolCallId,
+        approval: { status: "allow" },
+      },
+    ]);
     this.#setStatus("streaming");
     await this.#consumeStream(stream);
   }
@@ -641,12 +613,37 @@ export class RunSupervisor {
     }
     const client = await this.#ensureClient();
     try {
-      await client.sessions.get(mapping.trueforgeSessionId);
+      await getSession(client, mapping.trueforgeSessionId);
     } catch {
       await invalidateMapping(key);
       throw new Error("Stored session is stale and was invalidated");
     }
     this.sessionId = mapping.trueforgeSessionId;
+    if (mapping.pendingApprovals !== undefined && mapping.pendingApprovals.length > 0) {
+      this.pendingApprovals = mapping.pendingApprovals;
+      this.#setStatus("awaiting_approval");
+    }
+  }
+
+  async #persistSession(): Promise<void> {
+    if (this.repo === undefined || this.sessionId === undefined || this.modelName === undefined) {
+      return;
+    }
+    const key = sessionKey({
+      repositoryIdentity: this.repo.identity,
+      agentProfile: this.mode,
+      model: this.modelName,
+    });
+    await saveMapping({
+      key,
+      repositoryIdentity: this.repo.identity,
+      agentProfile: this.mode,
+      model: this.modelName,
+      trueforgeSessionId: this.sessionId,
+      pendingApprovals: this.pendingApprovals,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   runtimeMode(): "attached" | "spawned" | "none" {

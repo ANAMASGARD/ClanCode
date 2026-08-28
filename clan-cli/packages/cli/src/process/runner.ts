@@ -125,6 +125,12 @@ export function evaluateCommand(
       reason: "credential path arguments are denied",
     };
   }
+  if (args.some((arg) => arg === "-c" || arg === "-e" || arg === "--eval")) {
+    return {
+      allow: true,
+      risk: "SHELL_UNKNOWN",
+    };
+  }
   const safe = new Set([
     "git",
     "bun",
@@ -149,11 +155,47 @@ export function evaluateCommand(
   return { allow: true, risk: "SHELL_UNKNOWN" };
 }
 
-function cap(buffer: string, maxBytes: number): string {
-  if (Buffer.byteLength(buffer) <= maxBytes) {
-    return buffer;
+async function readCapped(
+  stream: ReadableStream<Uint8Array> | undefined,
+  maxBytes: number,
+  onLimit: () => void,
+): Promise<string> {
+  if (stream === undefined) {
+    return "";
   }
-  return Buffer.from(buffer).subarray(0, maxBytes).toString() + "\n…truncated";
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  let limited = false;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    if (value === undefined) {
+      continue;
+    }
+    if (size + value.byteLength > maxBytes) {
+      const remain = maxBytes - size;
+      if (remain > 0) {
+        chunks.push(value.subarray(0, remain));
+        size = maxBytes;
+      }
+      limited = true;
+      onLimit();
+      await reader.cancel().catch(() => undefined);
+      break;
+    }
+    chunks.push(value);
+    size += value.byteLength;
+  }
+  const merged = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(merged) + (limited ? "\n…truncated" : "");
 }
 
 export async function runCommand(
@@ -218,14 +260,20 @@ export async function runCommand(
   });
 
   let timedOut = false;
+  let overLimit = false;
   const timer = setTimeout(() => {
     timedOut = true;
     proc.kill("SIGKILL");
   }, request.timeoutMs);
 
+  const killOnLimit = () => {
+    overLimit = true;
+    proc.kill("SIGKILL");
+  };
+
   const [stdoutRaw, stderrRaw] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
+    readCapped(proc.stdout, request.maxStdoutBytes, killOnLimit),
+    readCapped(proc.stderr, request.maxStderrBytes, killOnLimit),
   ]);
   const exitCode = await proc.exited;
   clearTimeout(timer);
@@ -234,10 +282,10 @@ export async function runCommand(
     command: request.command,
     args: request.args,
     cwd: request.cwd,
-    exitCode: timedOut ? null : exitCode,
-    signal: timedOut ? "SIGKILL" : null,
-    stdout: cap(stdoutRaw, request.maxStdoutBytes),
-    stderr: cap(stderrRaw, request.maxStderrBytes),
+    exitCode: timedOut || overLimit ? null : exitCode,
+    signal: timedOut || overLimit ? "SIGKILL" : null,
+    stdout: stdoutRaw,
+    stderr: stderrRaw,
     durationMs: Date.now() - started,
     timedOut,
   };

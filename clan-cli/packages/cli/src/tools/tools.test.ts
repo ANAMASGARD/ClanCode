@@ -66,6 +66,17 @@ describe("tools", () => {
     }
   });
 
+  test("refuses patch of secret paths", async () => {
+    const contextRepo = await repo();
+    await writeFile(join(contextRepo.root, ".env"), "SECRET=1\n");
+    const patched = await executeTool(
+      { repo: contextRepo, mode: "build", deleteApproved: false, commandApproved: false },
+      "apply_patch",
+      { path: ".env", search: "SECRET=1", replace: "SECRET=2" },
+    );
+    expect(patched.ok).toBe(false);
+  });
+
   test("write and stale patch", async () => {
     const contextRepo = await repo();
     const written = await writeFileTool(contextRepo, "app.js", "ok\n", "module.exports = 1\n");

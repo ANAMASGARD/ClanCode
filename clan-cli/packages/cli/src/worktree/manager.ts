@@ -58,7 +58,12 @@ export async function createTaskWorktree(
   await git(repo, ["branch", branchName, commit]);
   const worktreePath = join(worktreeRoot(repo), branchName.replaceAll("/", "-"));
   await mkdir(worktreeRoot(repo), { recursive: true });
-  await git(repo, ["worktree", "add", worktreePath, branchName]);
+  try {
+    await git(repo, ["worktree", "add", worktreePath, branchName]);
+  } catch (error) {
+    await git(repo, ["branch", "-D", branchName]).catch(() => undefined);
+    throw error;
+  }
   return { worktreePath, branchName, baseCommit: commit };
 }
 

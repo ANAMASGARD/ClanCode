@@ -205,7 +205,7 @@ async function handleSlash(
         ...current,
         {
           kind: "system",
-          text: "/plan /build /cancel /status /diff /validate /sessions /resume /doctor /approve /deny /exit",
+          text: "/plan /build /cancel /status /diff /validate /sessions /resume /doctor /approve /deny /commit /push /pr /exit",
         },
       ]);
       return;
@@ -278,6 +278,22 @@ async function handleSlash(
       await supervisor.resolveApproval(false);
       setApproval(undefined);
       return;
+    case "/commit": {
+      const message = text.slice("/commit".length).trim() || "clan code";
+      await supervisor.commit(message, true);
+      setLines((current) => [...current, { kind: "system", text: `committed: ${message}` }]);
+      return;
+    }
+    case "/push":
+      await supervisor.push(true);
+      setLines((current) => [...current, { kind: "system", text: "pushed task branch" }]);
+      return;
+    case "/pr": {
+      const title = text.slice("/pr".length).trim() || "Clan Code task";
+      await supervisor.createPr(title, true);
+      setLines((current) => [...current, { kind: "system", text: `pull request: ${title}` }]);
+      return;
+    }
     case "/exit":
       await supervisor.stop();
       process.exit(0);

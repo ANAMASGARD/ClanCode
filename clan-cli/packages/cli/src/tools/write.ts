@@ -79,6 +79,9 @@ export async function replaceRange(
   try {
     const resolved = await resolveWithinRepo(repo, userPath, { mustExist: true });
     const rel = relativeToRoot(repo.root, resolved);
+    if (isSecretPath(rel)) {
+      return fail("secret_path", "Refusing to write a protected path");
+    }
     const current = await Bun.file(resolved).text();
     if (current.includes("\0")) {
       return fail("binary", "Binary editing is not supported");
@@ -108,6 +111,9 @@ export async function applyPatch(
   try {
     const resolved = await resolveWithinRepo(repo, userPath, { mustExist: true });
     const rel = relativeToRoot(repo.root, resolved);
+    if (isSecretPath(rel)) {
+      return fail("secret_path", "Refusing to write a protected path");
+    }
     const current = await Bun.file(resolved).text();
     if (!current.includes(search)) {
       return fail("stale", "Patch search text was not found (stale content)");
@@ -133,6 +139,9 @@ export async function deleteFile(
   try {
     const resolved = await resolveWithinRepo(repo, userPath, { mustExist: true });
     const rel = relativeToRoot(repo.root, resolved);
+    if (isSecretPath(rel)) {
+      return fail("secret_path", "Refusing to delete a protected path");
+    }
     await unlink(resolved);
     return ok({ path: rel });
   } catch (error) {
@@ -143,9 +152,9 @@ export async function deleteFile(
 export async function diffMetadata(
   repo: RepositoryContext,
 ): Promise<{ stat: string; diff: string }> {
-  const stat = await runCommand({
+  const names = await runCommand({
     command: "git",
-    args: ["diff", "--stat"],
+    args: ["diff", "--name-only", "HEAD"],
     cwd: repo.root,
     timeoutMs: 10_000,
     maxStdoutBytes: TOOL_LIMITS.maxOutputBytes,
@@ -153,17 +162,47 @@ export async function diffMetadata(
     env: sanitizeEnv(undefined),
     authorizedRoot: repo.root,
   });
-  const diff = await runCommand({
+  const untracked = await runCommand({
     command: "git",
-    args: ["diff"],
+    args: ["ls-files", "--others", "--exclude-standard"],
     cwd: repo.root,
-    timeoutMs: 15_000,
+    timeoutMs: 10_000,
     maxStdoutBytes: TOOL_LIMITS.maxOutputBytes,
     maxStderrBytes: 4_096,
     env: sanitizeEnv(undefined),
     authorizedRoot: repo.root,
   });
-  return { stat: stat.stdout, diff: diff.stdout };
+  const tracked = names.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !isSecretPath(line));
+  const extra = untracked.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !isSecretPath(line));
+
+  let diff = "";
+  if (tracked.length > 0) {
+    const trackedDiff = await runCommand({
+      command: "git",
+      args: ["diff", "HEAD", "--", ...tracked],
+      cwd: repo.root,
+      timeoutMs: 15_000,
+      maxStdoutBytes: TOOL_LIMITS.maxOutputBytes,
+      maxStderrBytes: 4_096,
+      env: sanitizeEnv(undefined),
+      authorizedRoot: repo.root,
+    });
+    diff += trackedDiff.stdout;
+  }
+  if (extra.length > 0) {
+    diff += `\nuntracked:\n${extra.join("\n")}\n`;
+  }
+  const statLines = [...tracked, ...extra];
+  return {
+    stat: statLines.length > 0 ? `${String(statLines.length)} paths` : "",
+    diff,
+  };
 }
 
 function mapBoundary(error: unknown): ToolResult<never> {

@@ -209,12 +209,16 @@ export async function executeTool(
       const argv = Array.isArray(rawArgs)
         ? rawArgs.filter((item): item is string => typeof item === "string")
         : [];
-      return await runCommandTool(context.repo, {
-        command: str("command"),
-        args: argv,
-        cwd: str("cwd") || undefined,
-        approved: context.commandApproved,
-      });
+      return await afterMutation(
+        context,
+        name,
+        await runCommandTool(context.repo, {
+          command: str("command"),
+          args: argv,
+          cwd: str("cwd") || undefined,
+          approved: context.commandApproved,
+        }),
+      );
     }
     default:
       return {
@@ -226,10 +230,10 @@ export async function executeTool(
 
 async function afterMutation(
   context: ToolContext,
-  name: string,
+  _name: string,
   result: ToolResult<unknown>,
 ): Promise<ToolResult<unknown>> {
-  if (result.ok && context.onMutation !== undefined && name !== "run_command") {
+  if (result.ok && context.onMutation !== undefined) {
     await context.onMutation();
   }
   return result;

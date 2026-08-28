@@ -106,24 +106,34 @@ export async function resolveWithinRepo(
         `Path does not exist inside repository: ${userPath}`,
       );
     }
-    const parent = await realpath(join(joined, "..")).catch(() => {
-      throw new RepositoryBoundaryError(
-        "escape",
-        `Path escapes repository: ${userPath}`,
-      );
-    });
-    const relParent = relativeInside(root, parent);
-    if (relParent === null) {
-      throw new RepositoryBoundaryError(
-        "escape",
-        `Path escapes repository: ${userPath}`,
-      );
-    }
+    const parent = join(joined, "..");
+    let cursor = parent;
+    const missing: string[] = [];
     const leaf = joined.split("/").filter(Boolean).at(-1);
     if (leaf === undefined || leaf === ".." || leaf === ".") {
       throw new RepositoryBoundaryError("escape", `Invalid path: ${userPath}`);
     }
-    return join(parent, leaf);
+    missing.unshift(leaf);
+    while (!existsSync(cursor)) {
+      const name = cursor.split("/").filter(Boolean).at(-1);
+      if (name === undefined || name === ".." || name === ".") {
+        throw new RepositoryBoundaryError("escape", `Invalid path: ${userPath}`);
+      }
+      missing.unshift(name);
+      const next = join(cursor, "..");
+      if (next === cursor) {
+        throw new RepositoryBoundaryError("escape", `Path escapes repository: ${userPath}`);
+      }
+      cursor = next;
+    }
+    const existing = await realpath(cursor);
+    if (relativeInside(root, existing) === null) {
+      throw new RepositoryBoundaryError(
+        "escape",
+        `Path escapes repository: ${userPath}`,
+      );
+    }
+    return join(existing, ...missing);
   }
 
   const resolved = await realpath(joined);

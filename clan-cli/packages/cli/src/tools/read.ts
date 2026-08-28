@@ -6,6 +6,7 @@ import {
 } from "../repository/repository.ts";
 import { fail, isSecretPath, ok, TOOL_LIMITS, type ToolResult } from "./types.ts";
 import { runCommand, sanitizeEnv } from "../process/runner.ts";
+import { diffMetadata } from "./write.ts";
 
 function relativeToRoot(root: string, absolute: string): string {
   return absolute === root ? "." : absolute.slice(root.length + 1);
@@ -157,20 +158,8 @@ export async function gitStatusTool(
 export async function gitDiffTool(
   repo: RepositoryContext,
 ): Promise<ToolResult<{ diff: string }>> {
-  const result = await runCommand({
-    command: "git",
-    args: ["diff"],
-    cwd: repo.root,
-    timeoutMs: 15_000,
-    maxStdoutBytes: TOOL_LIMITS.maxOutputBytes,
-    maxStderrBytes: 8_192,
-    env: sanitizeEnv(undefined),
-    authorizedRoot: repo.root,
-  });
-  if (result.exitCode !== 0) {
-    return fail("git_failed", result.stderr || "git diff failed");
-  }
-  return ok({ diff: result.stdout }, result.stdout.endsWith("…truncated"));
+  const meta = await diffMetadata(repo);
+  return ok({ diff: meta.diff }, meta.diff.endsWith("…truncated"));
 }
 
 export async function pathStat(

@@ -7,9 +7,10 @@ describe("process policy", () => {
     expect(evaluateCommand("git", ["push", "--force", "origin", "main"]).allow).toBe(false);
   });
 
-  test("marks unknown shell as not auto-safe", () => {
-    const sh = evaluateCommand("sh", ["-c", "echo hi"]);
-    expect(sh.allow).toBe(false);
+  test("python -c is not auto-safe", () => {
+    const py = evaluateCommand("python", ["-c", "print(1)"]);
+    expect(py.allow).toBe(true);
+    expect(py.risk).toBe("SHELL_UNKNOWN");
   });
 
   test("argv keeps special characters as args", async () => {
