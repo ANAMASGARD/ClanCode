@@ -5,6 +5,7 @@ import {
 import {
   ensureRuntime,
   stopRuntime,
+  type TrueforgeRuntimeHandle,
   verifySdkConnection,
   waitForHealth,
 } from "../src/trueforge/runtime.ts";
@@ -20,21 +21,26 @@ async function main(): Promise<void> {
 
   assertNodeRuntime(config.nodeBin);
 
-  const handle = await ensureRuntime(config);
-  console.log(`  Runtime:   ${handle.mode}`);
+  let handle: TrueforgeRuntimeHandle | undefined;
+  try {
+    handle = await ensureRuntime(config);
+    console.log(`  Runtime:   ${handle.mode}`);
 
-  await waitForHealth(config.baseUrl, config.startTimeoutMs);
-  console.log("  Health:    /healthz OK");
+    await waitForHealth(config.baseUrl, config.startTimeoutMs);
+    console.log("  Health:    /healthz OK");
 
-  const identity = await verifySdkConnection(
-    config.baseUrl,
-    config.sdkTimeoutSeconds,
-  );
-  console.log("  SDK:       auth.me() OK");
-  console.log(`  Identity:  ${JSON.stringify(identity)}`);
-
-  await stopRuntime(handle);
-  console.log("  Shutdown:  OK");
+    const identity = await verifySdkConnection(
+      config.baseUrl,
+      config.sdkTimeoutSeconds,
+    );
+    console.log("  SDK:       auth.me() OK");
+    console.log(`  Identity:  ${JSON.stringify(identity)}`);
+  } finally {
+    if (handle !== undefined) {
+      await stopRuntime(handle);
+      console.log("  Shutdown:  OK");
+    }
+  }
 }
 
 try {

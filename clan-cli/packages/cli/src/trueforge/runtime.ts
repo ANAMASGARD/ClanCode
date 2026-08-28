@@ -5,13 +5,42 @@ import type { TrueforgeConfig } from "./config.js";
 const ATTACH_PROBE_TIMEOUT_MS = 2_000;
 const STOP_TIMEOUT_MS = 5_000;
 const HEALTH_POLL_INTERVAL_MS = 250;
+const STDERR_CAPTURE_LIMIT_BYTES = 16_384;
+
+export class TrueforgeHealthError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "TrueforgeHealthError";
+  }
+}
 
 export type TrueforgeRuntimeHandle =
   | { mode: "attached"; baseUrl: string }
   | { mode: "spawned"; baseUrl: string; child: ChildProcess };
 
-async function sleep(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
+async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    throw new Error("Health check aborted", { cause: signal.reason });
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, ms);
+
+    const onAbort = () => {
+      cleanup();
+      reject(new Error("Health check aborted", { cause: signal?.reason }));
+    };
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    };
+
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 async function waitForExit(
@@ -40,13 +69,29 @@ async function waitForExit(
 export async function waitForHealth(
   baseUrl: string,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   let lastError: unknown;
 
   while (Date.now() < deadline) {
+    if (signal?.aborted) {
+      throw new TrueforgeHealthError("Health check aborted", {
+        cause: signal.reason,
+      });
+    }
+
+    const remainingMs = deadline - Date.now();
+    const controller = new AbortController();
+    const requestTimeout = setTimeout(() => controller.abort(), remainingMs);
+
+    const abortFromParent = () => controller.abort();
+    signal?.addEventListener("abort", abortFromParent, { once: true });
+
     try {
-      const response = await fetch(`${baseUrl}/healthz`);
+      const response = await fetch(`${baseUrl}/healthz`, {
+        signal: controller.signal,
+      });
       const body = await response.text();
       if (response.ok && body.includes("OK")) {
         return;
@@ -56,18 +101,35 @@ export async function waitForHealth(
       );
     } catch (error) {
       lastError = error;
+    } finally {
+      clearTimeout(requestTimeout);
+      signal?.removeEventListener("abort", abortFromParent);
     }
 
-    await sleep(HEALTH_POLL_INTERVAL_MS);
+    if (Date.now() >= deadline) {
+      break;
+    }
+
+    await sleep(
+      Math.min(HEALTH_POLL_INTERVAL_MS, deadline - Date.now()),
+      signal,
+    );
   }
 
-  throw new Error(
+  throw new TrueforgeHealthError(
     `TrueForge did not become healthy at ${baseUrl} within ${String(timeoutMs)}ms`,
     { cause: lastError },
   );
 }
 
-function spawnTrueforgeServer(config: TrueforgeConfig): ChildProcess {
+type SpawnedTrueforge = {
+  child: ChildProcess;
+  stderr: () => string;
+  spawnError: Promise<never>;
+};
+
+function spawnTrueforgeServer(config: TrueforgeConfig): SpawnedTrueforge {
+  let stderrBytes = 0;
   const stderrChunks: string[] = [];
 
   const child = spawn(
@@ -83,8 +145,31 @@ function spawnTrueforgeServer(config: TrueforgeConfig): ChildProcess {
     },
   );
 
+  const spawnError = new Promise<never>((_, reject) => {
+    child.once("error", (error) => {
+      reject(
+        new Error(
+          `Failed to start TrueForge with ${config.nodeBin}: ${error.message}`,
+          { cause: error },
+        ),
+      );
+    });
+  });
+
   child.stderr?.on("data", (chunk: Buffer | string) => {
-    stderrChunks.push(String(chunk));
+    const text = String(chunk);
+    const nextBytes = stderrBytes + text.length;
+    if (nextBytes <= STDERR_CAPTURE_LIMIT_BYTES) {
+      stderrChunks.push(text);
+      stderrBytes = nextBytes;
+      return;
+    }
+
+    const remaining = STDERR_CAPTURE_LIMIT_BYTES - stderrBytes;
+    if (remaining > 0) {
+      stderrChunks.push(text.slice(0, remaining));
+      stderrBytes = STDERR_CAPTURE_LIMIT_BYTES;
+    }
   });
 
   child.once("exit", (code, signal) => {
@@ -98,29 +183,52 @@ function spawnTrueforgeServer(config: TrueforgeConfig): ChildProcess {
     }
   });
 
-  return child;
+  return {
+    child,
+    stderr: () => stderrChunks.join("").trim(),
+    spawnError,
+  };
+}
+
+async function waitForHealthySpawn(
+  spawned: SpawnedTrueforge,
+  config: TrueforgeConfig,
+): Promise<ChildProcess> {
+  try {
+    await Promise.race([
+      waitForHealth(config.baseUrl, config.startTimeoutMs),
+      spawned.spawnError,
+    ]);
+    return spawned.child;
+  } catch (error) {
+    if (spawned.child.exitCode === null) {
+      spawned.child.kill("SIGKILL");
+      await waitForExit(spawned.child, STOP_TIMEOUT_MS);
+    }
+
+    if (spawned.stderr().length > 0 && error instanceof Error) {
+      throw new Error(`${error.message}\nTrueForge stderr:\n${spawned.stderr()}`, {
+        cause: error,
+      });
+    }
+
+    throw error;
+  }
 }
 
 export async function ensureRuntime(
   config: TrueforgeConfig,
+  signal?: AbortSignal,
 ): Promise<TrueforgeRuntimeHandle> {
   try {
-    await waitForHealth(config.baseUrl, ATTACH_PROBE_TIMEOUT_MS);
+    await waitForHealth(config.baseUrl, ATTACH_PROBE_TIMEOUT_MS, signal);
     return { mode: "attached", baseUrl: config.baseUrl };
   } catch {
     // Not already running — spawn a local standalone server.
   }
 
-  const child = spawnTrueforgeServer(config);
-
-  try {
-    await waitForHealth(config.baseUrl, config.startTimeoutMs);
-  } catch (error) {
-    if (!child.killed && child.exitCode === null) {
-      child.kill("SIGKILL");
-    }
-    throw error;
-  }
+  const spawned = spawnTrueforgeServer(config);
+  const child = await waitForHealthySpawn(spawned, config);
 
   return { mode: "spawned", baseUrl: config.baseUrl, child };
 }
@@ -145,14 +253,14 @@ export async function stopRuntime(
   }
 
   const { child } = handle;
-  if (child.killed || child.exitCode !== null) {
+  if (child.exitCode !== null) {
     return;
   }
 
   child.kill("SIGTERM");
   await waitForExit(child, STOP_TIMEOUT_MS);
 
-  if (child.exitCode === null && !child.killed) {
+  if (child.exitCode === null) {
     child.kill("SIGKILL");
     await waitForExit(child, STOP_TIMEOUT_MS);
   }
