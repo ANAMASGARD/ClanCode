@@ -351,13 +351,13 @@ A coding task should not modify the user's active checkout unpredictably.
 Preferred flow:
 
 ```
-selected repository
+selected repository (dirty checkout allowed)
         ↓
-validate clean/known state
+explicit base commit
         ↓
-create isolated branch/worktree
+create isolated clancode/* branch + git worktree
         ↓
-agent reads + edits
+agent reads + edits inside the worktree only
         ↓
 format / lint / test / build
         ↓
@@ -365,12 +365,18 @@ review diff
         ↓
 approval
         ↓
-commit + push
+commit + push (task branch only; never default branch)
         ↓
 pull request
 ```
 
-If an isolated worktree is unavailable, the CLI must still preserve a clear rollback path and must warn before touching an existing dirty working tree.
+Clan Code does **not** stash, reset, or clean the user's working directory.
+Build mutations happen only in the task worktree. A dirty primary checkout is
+supported and must remain unchanged. Failed runs preserve the worktree unless
+the user explicitly requests cleanup.
+
+If an isolated worktree cannot be created, the CLI must fail closed rather than
+edit the user's active checkout.
 
 ## 11. Web ↔ CLI Protocol
 
@@ -391,12 +397,16 @@ Communication must be:
 ```typescript
 type RunEvent = {
   version: 1;
+  eventId: string;
+  sequence: number;
   runId: string;
   timestamp: string;
   type: string;
   payload: unknown;
 };
 ```
+
+`eventId` and `sequence` are additive v1 fields (not a v2 protocol). The website and OpenTUI consume this vocabulary; they must not depend on raw TrueForge event types.
 
 Representative event types:
 

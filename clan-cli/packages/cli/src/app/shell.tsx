@@ -9,7 +9,13 @@ export function Shell() {
       width="100%"
       height="100%"
     >
-      <Header />
+      <Header
+        repository="unresolved"
+        mode="PLAN"
+        model="unselected"
+        runtime="idle"
+        status="idle"
+      />
     </box>
   );
 }

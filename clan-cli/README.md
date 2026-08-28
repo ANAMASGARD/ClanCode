@@ -1,46 +1,41 @@
 # Clan Code CLI
 
-The local execution-plane CLI for Clan Code. Clan Code wraps and supervises
-TrueForge as the agent runtime harness — users run `clancode` (future), not
-`npx @truefoundry/trueforge` directly.
+Local execution-plane CLI. Clan Code **wraps TrueForge** — it does not replace
+or fork it. Users run `clancode`.
 
-Currently implemented:
-
-- OpenTUI/React terminal presentation scaffold
-- TrueForge runtime adapter (`src/trueforge/`) — spawn/attach, health, SDK
-
-Planned layers: device pairing, repository execution, policy enforcement, run
-supervisor, website bridge, and Git/PR workflow.
+```bash
+clancode                 # interactive OpenTUI harness
+clancode run "task"      # headless (same run supervisor)
+clancode doctor [--json]
+clancode --version
+clancode --help
+```
 
 ## Requirements
 
-- **Bun** — CLI development and TUI (`bun run dev`)
-- **Node.js >= 22.14.0** — TrueForge local server process (spawned by the runtime adapter)
+- **Bun** — CLI development and the `clancode` binary
+- **Node.js >= 22.14.0** — TrueForge local server (spawned or attached)
+- A TrueForge model provider (or `CLAN_TRUEFORGE_MODEL`) for live agent turns
 
 ## Development
 
-From this directory:
-
 ```bash
-bun install
-bun run dev:clan
+bun install --ignore-scripts
+bun run --cwd packages/cli start
+bun run --cwd packages/cli typecheck
+bun test packages/cli/src packages/protocol/src
+bun run --cwd packages/cli supervisor:smoke
+bun run --cwd packages/cli pack:local
 ```
 
-For package-local development:
+`bun install --ignore-scripts` is required because TrueForge depends on
+`better-sqlite3` native builds.
 
-```bash
-cd packages/cli
-bun run dev
-```
+## Architecture
 
-## TrueForge smoke test
+TrueForge owns the agent loop (sessions, turns, streaming, MCP, approvals).
+Clan Code owns supervision, repository authorization, worktrees, local tools,
+process execution, Git delivery, RunEvents, and the TUI.
 
-Verifies Node preflight, TrueForge package resolution, spawn/attach, `/healthz`,
-and SDK `auth.me()` connectivity:
-
-```bash
-bun run trueforge:smoke
-```
-
-Configure TrueForge model providers at http://127.0.0.1:8790 before running
-agent turns (next milestone).
+Plan mode is read-only. Build mode edits an isolated `clancode/*` worktree and
+never mutates the user's active checkout (no stash/reset/clean).

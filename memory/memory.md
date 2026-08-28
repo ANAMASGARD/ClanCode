@@ -1,14 +1,14 @@
 # Clan Code — Project Memory
 
-Last updated: 2026-08-28 (TrueForge runtime adapter + smoke test)
+Last updated: 2026-08-28 (local TrueForge-supervised CLI harness)
 
 ## What This Repo Is
 
 Clan Code is a local-first AI coding harness:
 
 - **Web app (`app/`)** — Next.js control plane: auth, repo selection, clan UI, tasks, approvals, run timeline.
-- **CLI (`clan-cli/`)** — Intended local execution plane; the current implementation is only the OpenTUI/React presentation scaffold.
-- **TrueForge** — Runtime agent harness (not yet wired in CLI).
+- **CLI (`clan-cli/`)** — Local execution plane: `clancode` wraps TrueForge via a run supervisor.
+- **TrueForge** — Runtime agent harness (sessions, turns, streaming, MCP). Clan Code does not replace it.
 - **Delivery** — Agent changes go through isolated branches → PR → Qodo review → human merge.
 
 Stable contracts live in `ARCHITECTURE.md` and `AGENTS.md` (initially committed on `main` as `4e6144e`).
@@ -27,38 +27,64 @@ Do not move filesystem/shell/Git execution into the Next.js app.
 
 ### Status
 
-OpenTUI presentation scaffold plus a TrueForge runtime adapter. Clan Code wraps
-and supervises TrueForge (users run `clancode` eventually, not `npx
-@truefoundry/trueforge` directly). Device pairing, run supervisor, repo
-resolver, policy engine, safe execution tools, and Git/PR workflow are not
-implemented yet.
+Local `clancode` harness: run supervisor, repository boundary, Plan/Build tools
+over loopback MCP, isolated `clancode/*` worktrees, process runner, approvals,
+session mapping, OpenTUI chat, validation, Git/PR delivery, `doctor` / `run`.
+TrueForge adapter is preserved (attach/spawn, never kill attached). Model
+providers must still be configured in TrueForge (or `CLAN_TRUEFORGE_MODEL`) for
+live agent turns.
 
 ### Layout
 
 ```text
 clan-cli/
-├── package.json              # Independent Bun workspace root
+├── package.json
 ├── bun.lock
-├── tsconfig.base.json        # Shared strict TS config
-├── README.md                 # CLI scope and development notes
+├── tsconfig.base.json
+├── README.md
 └── packages/
-    └── cli/                  # @clanofagents/cli
-        ├── package.json
-        ├── tsconfig.json     # JSX via @opentui/react
-        ├── scripts/
-        │   └── trueforge-smoke.ts
-        └── src/
-            ├── main.tsx      # OpenTUI renderer/bootstrap only
-            ├── app/
-            │   └── shell.tsx # TUI shell composition
-            ├── components/
-            │   └── header.tsx
-            ├── commands/
-            │   └── index.ts  # Typed argv resolution placeholder
-            └── trueforge/
-                ├── config.ts # env + Node preflight + CLI path resolution
-                └── runtime.ts # ensureRuntime / health / SDK auth.me / stop
+    ├── protocol/             # RunEvent v1 (eventId + sequence)
+    └── cli/                  # @clanofagents/cli → bin clancode
+        ├── src/supervisor/
+        ├── src/repository/
+        ├── src/worktree/
+        ├── src/tools/
+        ├── src/process/
+        ├── src/mcp/
+        ├── src/git/
+        ├── src/session/
+        ├── src/doctor/
+        ├── src/cli/
+        └── src/trueforge/    # preserved adapter
 ```
+
+### What Exists Today
+
+1. **Run supervisor** — attach/spawn TrueForge, cancel/stop (spawned only), RunEvents.
+2. **Repository boundary** — `resolveWithinRepo` via realpath, not string prefix.
+3. **TrueForge sessions** — inline AgentSpec, `createTurnStream`, `sessions.cancel`.
+4. **Plan/Build MCP tools** — loopback `127.0.0.1` Streamable HTTP JSON-RPC.
+5. **Worktrees** — `clancode/<slug>-<id>` outside the user checkout (XDG state).
+6. **Approvals** — TrueForge `tool.approval_required` → `user.tool_approval`.
+7. **Production CLI** — `clancode`, `clancode run`, `clancode doctor[--json]`.
+
+### How to Run (local dev)
+
+```bash
+cd clan-cli
+bun install --ignore-scripts
+bun run --cwd packages/cli start
+# or: bun run --cwd packages/cli doctor
+```
+
+Pack locally: `bun run --cwd packages/cli pack:local`
+
+### Not Built Yet
+
+- Device pairing with web control plane / Socket.IO
+- Website 3D game visualization
+- npm registry publish
+- Remote PR smoke without `gh` authentication
 
 ### Stack
 
@@ -71,62 +97,6 @@ clan-cli/
 | TypeScript | Strict, ESNext, bundler resolution, no emit |
 | TrueForge server | `@truefoundry/trueforge@0.1.4` (exact pin; Node >= 22.14) |
 | TrueForge SDK | `@truefoundry/trueforge-sdk@0.1.3` (exact pin) |
-
-### What Exists Today
-
-1. **Workspace bootstrap** — `clan-cli/package.json` with
-   `workspaces: ["packages/*"]` and script `dev:clan`; it is a separate package
-   root from the Next.js app.
-2. **CLI package** — `@clanofagents/cli`, private, ESM (`"type": "module"`).
-3. **Entry (`main.tsx`)** — Creates the OpenTUI CLI renderer with explicit
-   Ctrl-C handling, mounts the React root through the supported
-   `@opentui/react/renderer` entrypoint, and delegates to `Shell`.
-4. **Shell (`app/shell.tsx`)** — Owns the full-screen dark TUI layout
-   (`#0D0D12`) and renders `Header`.
-5. **Header component** — Centered ASCII-art title: "Clan" (gold `#FFD54A`) +
-   "Code" using `ascii-font` / `tiny` font.
-6. **Command placeholder (`commands/index.ts`)** — Resolves the future `ui`,
-   `pair`, `run`, and `status` command names without executing them. Unknown
-   commands are represented explicitly.
-7. **Tooling** — `.gitignore`, shared `tsconfig.base.json`, package-level
-   tsconfig with `jsxImportSource: "@opentui/react"`, and a package
-   `typecheck` script.
-8. **TrueForge runtime adapter** — `src/trueforge/config.ts` + `runtime.ts`.
-   Spawns TrueForge under Node with `STANDALONE=true` on loopback, or attaches
-   to an already-running local server. Smoke: `bun run trueforge:smoke` verifies
-   Node preflight, `/healthz`, and SDK `auth.me()`. Model providers must be
-   configured in TrueForge Settings before agent turns (next milestone).
-
-### How to Run (local dev)
-
-From repo root:
-
-```bash
-cd clan-cli
-bun install
-bun run dev:clan
-```
-
-Or from the CLI package:
-
-```bash
-cd clan-cli/packages/cli
-bun run dev
-```
-
-Both use `bun run --watch` on `main.tsx`.
-
-### Not Built Yet (planned per ARCHITECTURE.md)
-
-- Device pairing with web control plane
-- Repository resolver / validation
-- Policy engine and approval gates
-- TrueForge run supervisor (adapter exists; supervisor layer next)
-- Structured event streaming to web (`RunEvent` protocol)
-- Isolated branch/worktree workflow
-- Safe tool execution (read / reversible write / sensitive)
-- Commit, push, PR creation
-- Offline / fail-closed behavior
 
 ---
 
