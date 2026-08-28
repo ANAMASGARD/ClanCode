@@ -1,8 +1,11 @@
 {
-    "name": "clanofagents",
-    "version": "1.0.0",
-  "workspaces": ["packages/*"],
+  "name": "clanofagents",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "dev:clan": "bun run --watch packages/cli/src/main.tsx"
+    "dev:clan": "bun run --watch packages/cli/src/main.tsx",
+    "trueforge:smoke": "bun run --cwd packages/cli trueforge:smoke"
   }
 }
