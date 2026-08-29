@@ -73,8 +73,9 @@ export function DevicePanel() {
       <div>
         <h1 className="text-xl font-semibold">Devices</h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Pair your laptop with <code className="font-mono">clancode login</code>, then keep it
-          online with <code className="font-mono">clancode connect</code>.
+          Pair once with <code className="font-mono">clancode login</code>. After a reboot, just
+          run <code className="font-mono">clancode</code> — this page turns green when the laptop
+          is connected. No second login.
         </p>
       </div>
 
@@ -94,26 +95,25 @@ export function DevicePanel() {
               <div>
                 <p className="font-medium">{device.label}</p>
                 <p className="text-xs text-zinc-500">
-                  {device.platform ?? "unknown platform"} · {device.status}
-                  {device.online ? " · online" : " · offline"}
+                  {device.platform ?? "unknown platform"} · paired
                 </p>
               </div>
               <div className="flex items-center gap-3">
                 <span
                   className={
                     device.online
-                      ? "inline-flex items-center gap-1 text-sm text-emerald-600"
-                      : "inline-flex items-center gap-1 text-sm text-zinc-500"
+                      ? "inline-flex items-center gap-2 text-sm font-medium text-emerald-400"
+                      : "inline-flex items-center gap-2 text-sm text-zinc-500"
                   }
                 >
                   <span
                     className={
                       device.online
-                        ? "h-2 w-2 rounded-full bg-emerald-500"
-                        : "h-2 w-2 rounded-full bg-zinc-400"
+                        ? "h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]"
+                        : "h-2.5 w-2.5 rounded-full bg-zinc-500"
                     }
                   />
-                  {device.online ? "Online" : "Offline"}
+                  {device.online ? "Connected" : "Offline"}
                 </span>
                 {device.status !== "revoked" ? (
                   <button

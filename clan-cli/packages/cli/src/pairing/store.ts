@@ -57,6 +57,15 @@ export async function saveStoredCredentials(
   await rename(tmp, file);
 }
 
+export async function hasStoredDeviceCredentials(): Promise<boolean> {
+  const envToken = process.env.CLANCODE_DEVICE_TOKEN;
+  if (envToken !== undefined && envToken.length > 0) {
+    return true;
+  }
+  const stored = await loadStoredCredentials();
+  return stored !== undefined && stored.deviceToken.length > 0;
+}
+
 export function resolveWebUrl(): string {
   return (process.env.CLANCODE_WEB_URL ?? "http://localhost:3000").replace(
     /\/$/,

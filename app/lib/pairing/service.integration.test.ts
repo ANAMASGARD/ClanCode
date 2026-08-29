@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { config } from "dotenv";
 
-import { generateDeliveryKey } from "./crypto";
 import {
   approvePairingChallenge,
   denyPairingChallenge,
@@ -37,9 +36,6 @@ describe.skipIf(!hasDatabase || !hasDeliveryKey)("pairing service integration", 
   });
 
   test("approved challenge delivers token once", async () => {
-    if (!process.env.PAIRING_DELIVERY_KEY) {
-      process.env.PAIRING_DELIVERY_KEY = generateDeliveryKey();
-    }
     const start = await startPairingChallenge({
       hostname: "test-host-2",
       platform: "linux",

@@ -18,6 +18,7 @@ import {
 } from "../trueforge/runtime-manager.ts";
 import { CommandJournal, isCommandExpired } from "./journal.ts";
 import type { RealtimeClient } from "./client.ts";
+import { loadStoredCredentials } from "../pairing/store.ts";
 import { loadPreferences } from "../session/preferences.ts";
 
 const BUSY_STATUSES = new Set([
@@ -71,8 +72,9 @@ export class ConnectSession {
   }
 
   async start(client: RealtimeClient): Promise<void> {
+    const stored = await loadStoredCredentials();
     const prefs = await loadPreferences();
-    this.#deviceId = prefs.deviceId;
+    this.#deviceId = stored?.deviceId ?? prefs.deviceId;
     this.#sendHello(client, "idle");
     this.#heartbeat = setInterval(() => {
       this.#sendHeartbeat(client);

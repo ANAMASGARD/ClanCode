@@ -17,7 +17,16 @@ describe("pairing crypto", () => {
   });
 
   test("rejects invalid delivery key length", () => {
+    const previous = process.env.PAIRING_DELIVERY_KEY;
     process.env.PAIRING_DELIVERY_KEY = "too-short";
-    expect(() => encryptDeviceToken("x")).toThrow(/32 bytes/);
+    try {
+      expect(() => encryptDeviceToken("x")).toThrow(/32 bytes/);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.PAIRING_DELIVERY_KEY;
+      } else {
+        process.env.PAIRING_DELIVERY_KEY = previous;
+      }
+    }
   });
 });

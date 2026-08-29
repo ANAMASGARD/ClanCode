@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 
 import {
   localDeviceMetadata,
+  hasStoredDeviceCredentials,
   resolveWebUrl,
   saveStoredCredentials,
 } from "./store.ts";
@@ -24,6 +25,13 @@ type PollResponse =
       controlUrl: string;
     };
 
+export type PairDeviceResult =
+  | "approved"
+  | "denied"
+  | "expired"
+  | "timeout"
+  | "error";
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -43,7 +51,7 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function openBrowser(url: string): Promise<void> {
+export async function openBrowser(url: string): Promise<void> {
   const platform = process.platform;
   const command =
     platform === "darwin"
@@ -51,8 +59,7 @@ async function openBrowser(url: string): Promise<void> {
       : platform === "win32"
         ? "cmd"
         : "xdg-open";
-  const args =
-    platform === "win32" ? ["/c", "start", "", url] : [url];
+  const args = platform === "win32" ? ["/c", "start", "", url] : [url];
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, { stdio: "ignore", detached: true });
     child.on("error", reject);
@@ -63,21 +70,40 @@ async function openBrowser(url: string): Promise<void> {
   });
 }
 
-export async function runLoginCommand(): Promise<number> {
+export async function hasDeviceCredentials(): Promise<boolean> {
+  return await hasStoredDeviceCredentials();
+}
+
+export async function pairDeviceInteractive(): Promise<PairDeviceResult> {
   const webUrl = resolveWebUrl();
   const meta = localDeviceMetadata();
-  console.log("Starting device pairing…");
 
-  const start = await postJson<StartResponse>(`${webUrl}/api/pair/start`, meta);
+  let start: StartResponse;
+  try {
+    start = await postJson<StartResponse>(`${webUrl}/api/pair/start`, meta);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Could not reach Clan Code at ${webUrl}: ${message}`);
+    console.error("Start the web app with `bun run dev` from the repo root.");
+    return "error";
+  }
+
   console.log(`Pairing code: ${start.userCode}`);
   console.log(`Opening ${start.verifyUrl}`);
+  console.log("Sign in with Clerk on the website, then approve this device.");
   await openBrowser(start.verifyUrl);
 
   const deadline = Date.now() + start.expiresIn * 1000;
   while (Date.now() < deadline) {
-    const poll = await postJson<PollResponse>(`${webUrl}/api/pair/poll`, {
-      deviceCode: start.deviceCode,
-    });
+    let poll: PollResponse;
+    try {
+      poll = await postJson<PollResponse>(`${webUrl}/api/pair/poll`, {
+        deviceCode: start.deviceCode,
+      });
+    } catch {
+      return "error";
+    }
+
     if (poll.status === "approved") {
       await saveStoredCredentials({
         deviceToken: poll.token,
@@ -88,23 +114,55 @@ export async function runLoginCommand(): Promise<number> {
       });
       const prefs = await loadPreferences();
       await savePreferences({ ...prefs, deviceId: poll.deviceId });
-      console.log("Device paired successfully.");
-      console.log("Run `clancode connect` to go online on the dashboard.");
-      return 0;
+      return "approved";
     }
     if (poll.status === "denied") {
-      console.error("Pairing was denied in the browser.");
-      return 1;
+      return "denied";
     }
     if (poll.status === "expired") {
-      console.error("Pairing challenge expired. Run `clancode login` again.");
-      return 1;
+      return "expired";
     }
-    const waitMs =
-      poll.status === "slow_down" ? start.interval * 1000 : start.interval * 1000;
+    const waitMs = start.interval * 1000;
     await sleep(waitMs);
   }
 
-  console.error("Timed out waiting for browser approval.");
-  return 1;
+  return "timeout";
+}
+
+export async function ensureDevicePaired(): Promise<number> {
+  if (await hasDeviceCredentials()) {
+    return 0;
+  }
+
+  console.log("This laptop is not paired with Clan Code yet.");
+  console.log("We'll open your browser so you can sign in and approve this device.\n");
+
+  const result = await pairDeviceInteractive();
+  switch (result) {
+    case "approved":
+      console.log("\nDevice paired successfully.");
+      console.log("This laptop stays paired after reboot. Running `clancode` comes online automatically.");
+      return 0;
+    case "denied":
+      console.error("\nPairing was denied in the browser.");
+      return 1;
+    case "expired":
+      console.error("\nPairing challenge expired. Try again.");
+      return 1;
+    case "timeout":
+      console.error("\nTimed out waiting for browser approval.");
+      return 1;
+    default:
+      console.error("\nPairing failed.");
+      return 1;
+  }
+}
+
+export async function runLoginCommand(): Promise<number> {
+  console.log("Starting device pairing…");
+  if (await hasDeviceCredentials()) {
+    console.log("This device already has stored credentials.");
+    console.log("Revoke the device on the dashboard first if you need to re-pair.");
+  }
+  return await ensureDevicePaired();
 }

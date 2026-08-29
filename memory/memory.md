@@ -1,6 +1,6 @@
 # ClanCode — Project Memory
 
-**Last updated:** 2026-08-29 (control-plane device pairing + live connect slice)
+**Last updated:** 2026-08-29 (pairing polish, TUI refresh, auto-connect)
 
 ## What This Repo Is
 
@@ -29,7 +29,9 @@ Local AI harness is feature-complete for hackathon scope. **Stop adding general 
 
 ---
 
-## Active milestone: Web control-plane pairing (this PR)
+## Active milestone: Web control-plane pairing (PR #19)
+
+**Branch:** `feat/clerk-device-pairing` — Clerk + device pairing + live CLI presence + TUI polish.
 
 ### What works now
 
@@ -37,13 +39,30 @@ Local AI harness is feature-complete for hackathon scope. **Stop adding general 
 |------|--------|
 | Clerk user auth (linked app `app_3IXcn0Ap17Yw14c5AcYZYb5mws8`) | ✅ |
 | Landing Sign in / Sign up / UserButton | ✅ |
-| `clancode login` / `clancode pair` | ✅ |
+| `clancode login` / `clancode pair` | ✅ (also runs automatically on first `clancode` / `dev:clan` launch) |
 | Browser `/pair?code=XXXX` approve / deny | ✅ |
 | One-time AES-GCM device token delivery | ✅ |
-| `clancode connect` → local Socket.IO `:3001` | ✅ |
+| Pairing approve/poll without Neon HTTP transactions | ✅ (sequential queries; no `db.transaction()`) |
+| TUI auto-connects to Socket.IO `:3001` after pairing | ✅ (`--offline` skips) |
+| `clancode connect` as optional dedicated presence process | ✅ |
 | `device.hello` / `device.heartbeat` via `"event"` envelope | ✅ |
-| Dashboard device list + online TTL (45s on `lastSeenAt`) | ✅ |
+| Dashboard device list + green **Connected** when heartbeat fresh (45s TTL) | ✅ |
+| CLI header green `● control=connected` chip (separate from `agent=`) | ✅ |
 | Revoke device (fail-closed on connect/heartbeat) | ✅ |
+| OpenTUI yellow theme + centered CLANCODE title + island ASCII art | ✅ |
+| Clerk middleware migration (resource-based auth in dashboard layout) | ✅ |
+
+### Status semantics (important)
+
+Two independent indicators:
+
+| Indicator | Meaning |
+|-----------|---------|
+| **`agent=ready`** (CLI) | Local TrueForge harness idle; not web connectivity |
+| **`control=connected`** (CLI) | Socket.IO link to realtime gateway active |
+| **Dashboard Connected** | Device heartbeat within 45s TTL |
+
+**Desired flow:** pair once in browser → credentials persist in `credentials.json` → reboot → run `clancode` → auto Socket.IO connect → green on dashboard + CLI. No second login.
 
 ### Pairing model
 
@@ -53,20 +72,25 @@ Local AI harness is feature-complete for hackathon scope. **Stop adding general 
 - Device lifecycle: `pending` (after browser approve) → `active` (after CLI poll) → `revoked`.
 - Challenge lifecycle: `pending` → `approved`/`denied`/`expired`/`consumed`.
 
+### Bug fixes in this slice
+
+1. **`/api/pair/approve` 500** — Neon HTTP driver lacks transactions; `approvePairingChallenge` and `pollPairingChallenge` rewritten as sequential queries.
+2. **Dashboard Offline while CLI `ready`** — CLI was not connecting to Socket.IO by default; `startControlPlaneLink()` now runs from TUI when paired.
+3. **Clerk deprecation** — `proxy.ts` simplified to `clerkMiddleware()`; `auth.protect()` moved to `app/dashboard/layout.tsx`.
+
 ### Dev commands
 
 ```bash
-# Web (port 3000)
+# Terminal 1 — Web (port 3000)
 bun run dev
 
-# Realtime gateway (port 3001)
+# Terminal 2 — Realtime gateway (port 3001)
 bun run realtime
 
-# CLI pairing + connect
-cd clan-cli && bun run --cwd packages/cli start login
-CLANCODE_WEB_URL=http://localhost:3000 \
-CLANCODE_CONTROL_URL=http://localhost:3001 \
-  bun run --cwd packages/cli start connect
+# Terminal 3 — CLI (pairs once, then auto-connects)
+cd clan-cli && bun run dev:clan
+# local-only harness without web: bun run dev:clan -- --offline
+# explicit pairing: bun run --cwd packages/cli start login
 ```
 
 ### Required env (web `.env.local`)
@@ -92,6 +116,17 @@ socket.on("command", ...)
 
 Production Socket.IO host is **decision later** (local Bun `:3001` for development; Vercel WebSockets are possible with instance-pinned Fluid compute but need reconnect/durable presence design).
 
+### Validation (2026-08-29)
+
+| Check | Result |
+|-------|--------|
+| `bun run test:pairing` (web) | 6 pass |
+| `bun run build` (web) | pass |
+| `bun run lint` | pass (after dist ignore + lint fixes) |
+| `clan-cli/packages/cli` typecheck | pass |
+| `bun test src` (CLI) | 75 pass |
+| `bun run build` (CLI) | pass |
+
 ### Not built yet (next PRs)
 
 1. **Task composer → `task.start` → RunEvents in browser → approval UI**
@@ -105,9 +140,15 @@ Production Socket.IO host is **decision later** (local Bun `:3001` for developme
 
 Full harness: supervisor, tools, worktrees, validation, Git/PR, `clancode connect` client, `@clancode/protocol`.
 
-**New:** `clancode login` / `pair`, credential store, composite credentials provider for connect.
+**New in PR #19:**
 
-Credential lookup order for `clancode connect`:
+- `clancode login` / `pair`, credential store, composite credentials provider
+- **Auto Socket.IO link** from TUI via `realtime/link.ts`
+- **TUI presentation:** `theme.ts`, `clan-art.ts` (island scene), `clan-banner.tsx`, refreshed `header.tsx`
+- Tests: `header.test.tsx`, `theme.test.ts`, `link.test.ts`, `login.test.ts`
+- `ConnectSession` uses `deviceId` from stored credentials (not random prefs id)
+
+Credential lookup order for realtime:
 
 ```text
 CLANCODE_DEVICE_TOKEN
@@ -121,10 +162,11 @@ credentials.json
 
 ## Web App — Current State
 
-- Clerk on `/`, protected `/dashboard`, public `/pair`
+- Clerk on `/`, protected `/dashboard` (layout-level `auth.protect`), public `/pair`
 - Drizzle tables: `devices`, `pairing_challenges`, `pairing_deliveries`
 - Migration: `drizzle/0000_smooth_sasquatch.sql`
-- Dashboard polls `GET /api/devices` every 5s (no browser Socket.IO yet)
+- Dashboard polls `GET /api/devices` every 5s; green connected dot in `device-panel.tsx`
+- Copy clarifies: pair once, run `clancode`, no second login
 
 ---
 

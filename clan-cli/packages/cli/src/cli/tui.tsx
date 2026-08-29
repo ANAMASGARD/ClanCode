@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react/renderer";
 import { Header } from "../components/header.tsx";
+import { theme, type ControlPlaneState } from "../components/theme.ts";
+import { startControlPlaneLink } from "../realtime/link.ts";
 import { formatDoctor, runDoctor } from "../doctor/doctor.ts";
 import {
   RunSupervisor,
@@ -17,7 +19,9 @@ import type { RunEvent } from "@clancode/protocol";
 
 type Props = {
   repo?: string;
+  controlPlane?: boolean;
   onSupervisor?: (supervisor: RunSupervisor) => void;
+  onControlPlaneStop?: (stop: () => Promise<void>) => void;
 };
 
 type Line = {
@@ -40,7 +44,11 @@ export function ChatApp(props: Props) {
   ]);
   const [input, setInput] = useState("");
   const [approval, setApproval] = useState<PendingApproval | undefined>(undefined);
+  const [connection, setConnection] = useState<ControlPlaneState>(
+    props.controlPlane === true ? "connecting" : "offline",
+  );
   const deltaBuffer = useRef("");
+  const shutdownRef = useRef<(() => Promise<void>) | undefined>(undefined);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -116,6 +124,29 @@ export function ChatApp(props: Props) {
     };
   }, [props.repo, props.onSupervisor]);
 
+  useEffect(() => {
+    if (props.controlPlane !== true) {
+      shutdownRef.current = async () => {
+        await supervisorRef.current?.stop();
+        process.exit(0);
+      };
+      return;
+    }
+    const link = startControlPlaneLink({
+      enabled: true,
+      onState: setConnection,
+    });
+    props.onControlPlaneStop?.(link.stop);
+    shutdownRef.current = async () => {
+      await link.stop();
+      await supervisorRef.current?.stop();
+      process.exit(0);
+    };
+    return () => {
+      void link.stop();
+    };
+  }, [props.controlPlane, props.onControlPlaneStop]);
+
   const submit = useCallback(
     async (value?: string) => {
       const supervisor = supervisorRef.current;
@@ -125,7 +156,15 @@ export function ChatApp(props: Props) {
       }
       setInput("");
       if (text.startsWith("/")) {
-        await handleSlash(supervisor, text, setMode, setLines, setApproval, setBranch);
+        await handleSlash(
+          supervisor,
+          text,
+          setMode,
+          setLines,
+          setApproval,
+          setBranch,
+          () => shutdownRef.current?.(),
+        );
         setStatus(supervisor.status());
         return;
       }
@@ -137,8 +176,8 @@ export function ChatApp(props: Props) {
   );
 
   return (
-    <box flexDirection="column" width="100%" height="100%" backgroundColor="#0D0D12">
-      <box height={5}>
+    <box flexDirection="column" width="100%" height="100%" backgroundColor={theme.ink}>
+      <box width="100%" alignItems="center">
         <Header
           repository={repo}
           branch={branch}
@@ -146,9 +185,22 @@ export function ChatApp(props: Props) {
           model={model}
           runtime={runtime}
           status={status}
+          connection={connection}
         />
       </box>
-      <box flexGrow={1} flexDirection="column" paddingLeft={1}>
+      <box
+        flexGrow={1}
+        flexDirection="column"
+        marginLeft={1}
+        marginRight={1}
+        marginBottom={1}
+        border
+        borderStyle="single"
+        title="Transcript"
+        titleColor={theme.goldDim}
+        padding={1}
+        backgroundColor="#12121A"
+      >
         {lines.slice(-24).map((line, index) => (
           <text key={`${line.kind}-${String(index)}`} fg={colorFor(line.kind)}>
             {`${line.kind}: ${line.text}`}
@@ -156,13 +208,33 @@ export function ChatApp(props: Props) {
         ))}
       </box>
       {approval !== undefined ? (
-        <box height={5} paddingLeft={1}>
-          <text fg="#FF8A80">
+        <box
+          marginLeft={1}
+          marginRight={1}
+          marginBottom={1}
+          padding={1}
+          border
+          borderStyle="single"
+          title="Approval"
+          titleColor={theme.danger}
+        >
+          <text fg={theme.danger}>
             {`Approval ${approval.risk}: ${approval.toolName}\n${approval.summary}\ncwd=${approval.cwd ?? ""}  /approve or /deny`}
           </text>
         </box>
       ) : null}
-      <box height={3} paddingLeft={1}>
+      <box
+        height={3}
+        marginLeft={1}
+        marginRight={1}
+        marginBottom={1}
+        border
+        borderStyle="single"
+        title="Message"
+        titleColor={theme.gold}
+        paddingLeft={1}
+        paddingRight={1}
+      >
         <input
           placeholder="> message or /help"
           value={input}
@@ -180,13 +252,13 @@ export function ChatApp(props: Props) {
 function colorFor(kind: Line["kind"]): string {
   switch (kind) {
     case "user":
-      return "#80D8FF";
+      return theme.sky;
     case "agent":
-      return "#FFFFFF";
+      return theme.white;
     case "system":
-      return "#FFD54A";
+      return theme.gold;
     case "event":
-      return "#90A4AE";
+      return theme.muted;
     default: {
       const _never: never = kind;
       return _never;
@@ -201,6 +273,7 @@ async function handleSlash(
   setLines: Dispatch<SetStateAction<Line[]>>,
   setApproval: (value: PendingApproval | undefined) => void,
   setBranch: (value: string) => void,
+  requestShutdown?: () => void,
 ): Promise<void> {
   const [command] = text.split(" ");
   switch (command) {
@@ -329,6 +402,10 @@ async function handleSlash(
       return;
     }
     case "/exit":
+      if (requestShutdown !== undefined) {
+        requestShutdown();
+        return;
+      }
       await supervisor.stop();
       process.exit(0);
       return;
@@ -340,17 +417,30 @@ async function handleSlash(
   }
 }
 
-export async function startInteractiveUi(options: { repo?: string }): Promise<void> {
+export async function startInteractiveUi(options: {
+  repo?: string;
+  controlPlane?: boolean;
+}): Promise<void> {
   const renderer = await createCliRenderer({ exitOnCtrlC: false });
   let supervisor: RunSupervisor | undefined;
+  let stopControlPlane: (() => Promise<void>) | undefined;
   createRoot(renderer).render(
     <ChatApp
       repo={options.repo}
+      controlPlane={options.controlPlane === true}
       onSupervisor={(instance) => {
         supervisor = instance;
       }}
+      onControlPlaneStop={(stop) => {
+        stopControlPlane = stop;
+      }}
     />,
   );
+  const shutdown = async (): Promise<void> => {
+    await stopControlPlane?.();
+    await supervisor?.stop();
+    process.exit(0);
+  };
   renderer.keyInput.on("keypress", (event) => {
     if (!(event.ctrl && event.name === "c")) {
       return;
@@ -366,9 +456,7 @@ export async function startInteractiveUi(options: { repo?: string }): Promise<vo
       void current.cancel();
       return;
     }
-    void current?.stop().finally(() => {
-      process.exit(0);
-    });
+    void shutdown();
   });
   await new Promise<void>(() => {
     // OpenTUI owns the process until /exit or idle Ctrl+C.

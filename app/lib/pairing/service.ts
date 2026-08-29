@@ -164,70 +164,60 @@ export async function pollPairingChallenge(input: {
     return { status: "pending" };
   }
 
-  return await db.transaction(async (tx) => {
-    const lockedRows = await tx
-      .select()
-      .from(pairingChallenges)
-      .where(
-        and(
-          eq(pairingChallenges.id, challenge.id),
-          eq(pairingChallenges.status, "approved"),
-        ),
-      )
-      .limit(1);
-    const locked = lockedRows[0];
-    if (locked === undefined || locked.deviceId === null) {
-      return { status: "pending" } satisfies PairPollResult;
-    }
-
-    const deliveryRows = await tx
-      .select()
-      .from(pairingDeliveries)
-      .where(eq(pairingDeliveries.challengeId, locked.id))
-      .limit(1);
-    const delivery = deliveryRows[0];
-    if (delivery === undefined) {
-      return { status: "expired" } satisfies PairPollResult;
-    }
-
-    const deleted = await tx
-      .delete(pairingDeliveries)
-      .where(eq(pairingDeliveries.challengeId, locked.id))
-      .returning({ challengeId: pairingDeliveries.challengeId });
-    if (deleted.length === 0) {
-      return { status: "expired" } satisfies PairPollResult;
-    }
-
-    await tx
-      .update(pairingChallenges)
-      .set({ status: "consumed" })
-      .where(
-        and(
-          eq(pairingChallenges.id, locked.id),
-          eq(pairingChallenges.status, "approved"),
-        ),
-      );
-
-    await tx
-      .update(devices)
-      .set({ status: "active" })
-      .where(
-        and(eq(devices.id, locked.deviceId), eq(devices.status, "pending")),
-      );
-
-    const token = decryptDeviceToken({
-      iv: delivery.iv,
-      ciphertext: delivery.ciphertext,
-      authTag: delivery.authTag,
+  // neon-http has no transactions; delete delivery first for one-time token handoff.
+  const deleted = await db
+    .delete(pairingDeliveries)
+    .where(eq(pairingDeliveries.challengeId, challenge.id))
+    .returning({
+      iv: pairingDeliveries.iv,
+      ciphertext: pairingDeliveries.ciphertext,
+      authTag: pairingDeliveries.authTag,
     });
+  if (deleted.length === 0) {
+    return { status: "expired" };
+  }
 
-    return {
-      status: "approved",
-      token,
-      deviceId: locked.deviceId,
-      controlUrl: resolveControlUrl(),
-    } satisfies PairPollResult;
+  const consumed = await db
+    .update(pairingChallenges)
+    .set({ status: "consumed" })
+    .where(
+      and(
+        eq(pairingChallenges.id, challenge.id),
+        eq(pairingChallenges.status, "approved"),
+      ),
+    )
+    .returning({ deviceId: pairingChallenges.deviceId });
+  const consumedChallenge = consumed[0];
+  if (
+    consumedChallenge === undefined ||
+    consumedChallenge.deviceId === null
+  ) {
+    return { status: "expired" };
+  }
+
+  await db
+    .update(devices)
+    .set({ status: "active" })
+    .where(
+      and(
+        eq(devices.id, consumedChallenge.deviceId),
+        eq(devices.status, "pending"),
+      ),
+    );
+
+  const delivery = deleted[0];
+  const token = decryptDeviceToken({
+    iv: delivery.iv,
+    ciphertext: delivery.ciphertext,
+    authTag: delivery.authTag,
   });
+
+  return {
+    status: "approved",
+    token,
+    deviceId: consumedChallenge.deviceId,
+    controlUrl: resolveControlUrl(),
+  };
 }
 
 export async function approvePairingChallenge(input: {
@@ -272,50 +262,52 @@ export async function approvePairingChallenge(input: {
     "ClanCode device";
   const encrypted = encryptDeviceToken(token);
 
-  return await db.transaction(async (tx) => {
-    const updated = await tx
-      .update(pairingChallenges)
-      .set({
-        status: "approved",
-        clerkUserId: input.clerkUserId,
-      })
-      .where(
-        and(
-          eq(pairingChallenges.id, challenge.id),
-          eq(pairingChallenges.status, "pending"),
-        ),
-      )
-      .returning({ id: pairingChallenges.id });
+  const updated = await db
+    .update(pairingChallenges)
+    .set({
+      status: "approved",
+      clerkUserId: input.clerkUserId,
+    })
+    .where(
+      and(
+        eq(pairingChallenges.id, challenge.id),
+        eq(pairingChallenges.status, "pending"),
+      ),
+    )
+    .returning({ id: pairingChallenges.id });
 
-    if (updated.length === 0) {
-      return { ok: false as const, reason: "invalid_state" };
-    }
+  if (updated.length === 0) {
+    return { ok: false, reason: "invalid_state" };
+  }
 
-    const [device] = await tx
-      .insert(devices)
-      .values({
-        clerkUserId: input.clerkUserId,
-        label,
-        platform: challenge.platform,
-        tokenHash,
-        status: "pending",
-      })
-      .returning({ id: devices.id });
+  const inserted = await db
+    .insert(devices)
+    .values({
+      clerkUserId: input.clerkUserId,
+      label,
+      platform: challenge.platform,
+      tokenHash,
+      status: "pending",
+    })
+    .returning({ id: devices.id });
+  const device = inserted[0];
+  if (device === undefined) {
+    throw new Error("Failed to create device during pairing approval");
+  }
 
-    await tx
-      .update(pairingChallenges)
-      .set({ deviceId: device.id })
-      .where(eq(pairingChallenges.id, challenge.id));
+  await db
+    .update(pairingChallenges)
+    .set({ deviceId: device.id })
+    .where(eq(pairingChallenges.id, challenge.id));
 
-    await tx.insert(pairingDeliveries).values({
-      challengeId: challenge.id,
-      iv: encrypted.iv,
-      ciphertext: encrypted.ciphertext,
-      authTag: encrypted.authTag,
-    });
-
-    return { ok: true as const, deviceId: device.id };
+  await db.insert(pairingDeliveries).values({
+    challengeId: challenge.id,
+    iv: encrypted.iv,
+    ciphertext: encrypted.ciphertext,
+    authTag: encrypted.authTag,
   });
+
+  return { ok: true, deviceId: device.id };
 }
 
 export async function denyPairingChallenge(input: {
