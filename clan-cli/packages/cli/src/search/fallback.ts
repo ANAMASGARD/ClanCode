@@ -1,5 +1,5 @@
-import { join } from "node:path";
 import type { RepositoryContext } from "../repository/repository.ts";
+import { RepositoryBoundaryError, resolveWithinRepo } from "../repository/repository.ts";
 import { runCommand, sanitizeEnv } from "../process/runner.ts";
 import { TOOL_LIMITS } from "../tools/types.ts";
 import { shouldSkipRelativePath } from "./ignore.ts";
@@ -63,6 +63,7 @@ export async function searchWithGitFallback(
   const maxMatches = request.maxMatches ?? TOOL_LIMITS.maxGrepMatches;
   const fixedString = request.fixedString ?? false;
   const caseSensitive = request.caseSensitive ?? false;
+  await resolveWithinRepo(repo, request.path ?? ".", { mustExist: true });
   const candidates = await listGitCandidates(repo);
   const matches: SearchMatch[] = [];
   let truncated = false;
@@ -71,8 +72,16 @@ export async function searchWithGitFallback(
     if (!pathMatchesInclude(rel, request.include, request.path)) {
       continue;
     }
-    const full = join(repo.root, rel);
-    const file = Bun.file(full);
+    let resolved: string;
+    try {
+      resolved = await resolveWithinRepo(repo, rel, { mustExist: true });
+    } catch (error) {
+      if (error instanceof RepositoryBoundaryError) {
+        continue;
+      }
+      throw error;
+    }
+    const file = Bun.file(resolved);
     if (!(await file.exists()) || file.size > TOOL_LIMITS.maxFileBytes) {
       continue;
     }

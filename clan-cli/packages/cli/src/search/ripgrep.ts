@@ -1,5 +1,5 @@
-import { join } from "node:path";
 import type { RepositoryContext } from "../repository/repository.ts";
+import { resolveWithinRepo } from "../repository/repository.ts";
 import { runCommand, sanitizeEnv } from "../process/runner.ts";
 import { TOOL_LIMITS } from "../tools/types.ts";
 import { shouldSkipRelativePath } from "./ignore.ts";
@@ -75,9 +75,7 @@ export async function searchWithRipgrep(
   request: SearchRequest,
 ): Promise<SearchResult> {
   const maxMatches = request.maxMatches ?? TOOL_LIMITS.maxGrepMatches;
-  const searchRoot = request.path
-    ? join(repo.root, request.path.replace(/^\.\/?/, ""))
-    : repo.root;
+  const searchRoot = await resolveWithinRepo(repo, request.path ?? ".", { mustExist: true });
 
   const args = ["--json", "--max-count", String(maxMatches)];
   if (!request.caseSensitive) {
@@ -85,8 +83,6 @@ export async function searchWithRipgrep(
   }
   if (request.fixedString) {
     args.push("-F");
-  } else {
-    args.push("-E");
   }
   if (request.include !== undefined && request.include.length > 0) {
     args.push("-g", request.include);
@@ -130,11 +126,15 @@ export async function searchWithRipgrep(
     let contextLines: string[] = [];
     if (rel !== undefined && (request.contextBefore ?? 0) + (request.contextAfter ?? 0) > 0) {
       if (!fileCache.has(rel)) {
-        const full = join(repo.root, rel);
-        const file = Bun.file(full);
-        if (await file.exists()) {
-          fileCache.set(rel, (await file.text()).split("\n"));
-        } else {
+        try {
+          const resolved = await resolveWithinRepo(repo, rel, { mustExist: true });
+          const file = Bun.file(resolved);
+          if (await file.exists()) {
+            fileCache.set(rel, (await file.text()).split("\n"));
+          } else {
+            fileCache.set(rel, []);
+          }
+        } catch {
           fileCache.set(rel, []);
         }
       }

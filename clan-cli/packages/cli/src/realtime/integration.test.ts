@@ -260,6 +260,61 @@ describe("ConnectSession realtime integration", () => {
     await session.stop(client);
   });
 
+  test("concurrent duplicate commandId acks duplicate once", async () => {
+    let startCount = 0;
+    class CountingSupervisor extends FakeSupervisor {
+      override async start(repositoryPath: string): Promise<void> {
+        startCount += 1;
+        await super.start(repositoryPath);
+      }
+    }
+    const { session, client } = await startSession({
+      supervisor: new CountingSupervisor(),
+    });
+    const start = command({
+      type: "task.start",
+      commandId: "cmd-concurrent-dup",
+      payload: { repositoryPath: "/tmp/repo", prompt: "once" },
+    });
+    deviceSocket?.emit("command", start);
+    deviceSocket?.emit("command", start);
+    await Bun.sleep(150);
+
+    const dupAcks = clientEvents.filter(
+      (item) =>
+        (item as { type?: string }).type === "command.ack" &&
+        (item as { payload?: { commandId?: string; status?: string } }).payload?.commandId ===
+          "cmd-concurrent-dup" &&
+        (item as { payload?: { status?: string } }).payload?.status === "duplicate",
+    );
+    expect(startCount).toBe(1);
+    expect(dupAcks.length).toBeGreaterThanOrEqual(1);
+    await session.stop(client);
+  });
+
+  test("malformed command acks rejected when commandId is present", async () => {
+    const { session, client } = await startSession();
+    deviceSocket?.emit("command", {
+      version: 1,
+      commandId: "cmd-malformed-1",
+      deviceId,
+      issuedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 120_000).toISOString(),
+      type: "task.nope",
+      payload: {},
+    });
+    await Bun.sleep(50);
+
+    const ack = clientEvents.find(
+      (item) =>
+        (item as { type?: string }).type === "command.ack" &&
+        (item as { payload?: { commandId?: string } }).payload?.commandId === "cmd-malformed-1",
+    ) as { payload?: { status?: string; reason?: string } } | undefined;
+    expect(ack?.payload?.status).toBe("rejected");
+    expect(ack?.payload?.reason).toBe("invalid");
+    await session.stop(client);
+  });
+
   test("approval.resolve matches runId and toolCallId", async () => {
     const supervisor = new FakeSupervisor();
     const { session, client } = await startSession({ supervisor });

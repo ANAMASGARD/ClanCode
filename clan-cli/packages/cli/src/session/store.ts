@@ -106,12 +106,22 @@ async function loadAll(): Promise<SessionMapping[]> {
     if (!Array.isArray(parsed)) {
       return [];
     }
-    return parsed
-      .filter(isMapping)
-      .map((row) => ({
+    const rows = parsed.filter(isMapping);
+    let migrated = false;
+    const normalized = rows.map((row) => {
+      if (typeof row.id === "string" && row.id.length > 0) {
+        return row;
+      }
+      migrated = true;
+      return {
         ...row,
-        id: row.id ?? crypto.randomUUID().slice(0, 8),
-      }));
+        id: crypto.randomUUID().slice(0, 8),
+      };
+    });
+    if (migrated) {
+      await saveAll(normalized);
+    }
+    return normalized;
   } catch {
     return [];
   }

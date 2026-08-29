@@ -561,6 +561,7 @@ export class RunSupervisor {
     }
     this.mode = mode;
     this.sessionId = undefined;
+    this.#mappingId = undefined;
     if (mode === "build" && this.primaryRepo !== undefined && this.worktree === undefined) {
       this.worktree = await createTaskWorktree(this.primaryRepo, "build");
       this.repo = await resolveRepository(this.worktree.worktreePath);

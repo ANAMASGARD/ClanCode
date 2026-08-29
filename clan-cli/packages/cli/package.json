@@ -2,7 +2,6 @@
   "name": "@clancode/cli",
   "version": "0.1.0-beta.1",
   "description": "Local-first TrueForge-supervised AI coding harness",
-  "module": "src/cli.ts",
   "type": "module",
   "bin": {
     "clancode": "./dist/cli.js"

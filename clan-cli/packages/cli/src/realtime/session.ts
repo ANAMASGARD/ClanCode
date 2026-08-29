@@ -60,6 +60,7 @@ export class ConnectSession {
   #deviceId: string | undefined;
   #heartbeat: ReturnType<typeof setInterval> | undefined;
   #unsubscribe: (() => void) | undefined;
+  #commandChain: Promise<void> = Promise.resolve();
 
   constructor(options: ConnectSessionOptions = {}) {
     this.#runtimeManager = options.runtimeManager ?? new SupervisorRuntimeManager();
@@ -76,7 +77,14 @@ export class ConnectSession {
       this.#sendHeartbeat(client);
     }, 20_000);
     client.onCommand((payload) => {
-      void this.#handleCommand(client, payload);
+      this.#commandChain = this.#commandChain
+        .then(() => this.#handleCommand(client, payload))
+        .catch((error) => {
+          console.error(
+            "connect command handler failed:",
+            error instanceof Error ? error.message : String(error),
+          );
+        });
     });
   }
 
@@ -99,7 +107,15 @@ export class ConnectSession {
     let command: CommandEnvelope;
     try {
       command = parseCommandEnvelope(raw);
-    } catch {
+    } catch (error) {
+      const commandId = extractCommandId(raw);
+      console.error(
+        "connect command parse failed:",
+        error instanceof Error ? error.message : String(error),
+      );
+      if (commandId !== undefined) {
+        this.#ack(client, commandId, "rejected", undefined, "invalid");
+      }
       return;
     }
     if (command.deviceId !== this.#deviceId) {
@@ -351,4 +367,12 @@ export class ConnectSession {
       payload,
     });
   }
+}
+
+function extractCommandId(raw: unknown): string | undefined {
+  if (typeof raw !== "object" || raw === null) {
+    return undefined;
+  }
+  const commandId = (raw as Record<string, unknown>).commandId;
+  return typeof commandId === "string" && commandId.length > 0 ? commandId : undefined;
 }

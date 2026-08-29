@@ -50,15 +50,18 @@ export async function runCli(argv: readonly string[]): Promise<number> {
     assertNodeRuntime(config.nodeBin);
     const handle = await ensureRuntime(config);
     const client = createAgentClient(config);
-    const models = await listAvailableModels(client);
-    for (const name of models) {
-      console.log(name);
+    try {
+      const models = await listAvailableModels(client);
+      for (const name of models) {
+        console.log(name);
+      }
+      return 0;
+    } finally {
+      if (handle.mode === "spawned") {
+        const { stopRuntime } = await import("../trueforge/runtime.ts");
+        await stopRuntime(handle);
+      }
     }
-    if (handle.mode === "spawned") {
-      const { stopRuntime } = await import("../trueforge/runtime.ts");
-      await stopRuntime(handle);
-    }
-    return 0;
   }
   if (args[0] === "model") {
     const name = args[1];
