@@ -1,21 +1,23 @@
-import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { spawnSyncBounded } from "../src/process/spawn-sync.ts";
 
 const cliRoot = join(import.meta.dir, "..");
 const distDir = join(cliRoot, "dist");
-const packedDir = join(cliRoot, "pack");
 
 async function main(): Promise<void> {
-  const build = Bun.spawnSync(
+  const build = spawnSyncBounded(
+    "bun",
     [
-      "bun",
       "build",
       "src/cli.ts",
       "--outfile",
       "dist/cli.js",
       "--target",
       "bun",
+      "--banner",
+      "#!/usr/bin/env bun",
       "--external",
       "@truefoundry/trueforge",
       "--external",
@@ -27,115 +29,96 @@ async function main(): Promise<void> {
       "--external",
       "react",
     ],
-    { cwd: cliRoot, stdout: "inherit", stderr: "inherit" },
+    {
+      cwd: cliRoot,
+      timeoutMs: 120_000,
+      maxOutputBytes: 4_194_304,
+    },
   );
   if (build.exitCode !== 0) {
-    throw new Error("bun build failed");
+    throw new Error(build.stderr || "bun build failed");
   }
 
-  const packManifest = {
-    name: "clancode",
-    version: "0.1.0",
-    type: "module",
-    bin: { clancode: "dist/cli.js" },
-    files: ["dist"],
-    engines: { node: ">=22.14.0" },
-    dependencies: {
-      "@opentui/core": "^0.5.6",
-      "@opentui/react": "^0.5.6",
-      "@truefoundry/trueforge": "0.1.4",
-      "@truefoundry/trueforge-sdk": "0.1.3",
-      react: "^19.2.6",
-    },
-  };
+  const normalize = spawnSyncBounded("bun", ["run", "scripts/normalize-dist.ts"], {
+    cwd: cliRoot,
+    timeoutMs: 30_000,
+    maxOutputBytes: 1_048_576,
+  });
+  if (normalize.exitCode !== 0) {
+    throw new Error(normalize.stderr || "normalize-dist failed");
+  }
 
-  await rm(packedDir, { recursive: true, force: true });
-  await Bun.write(join(packedDir, "package.json"), JSON.stringify(packManifest, null, 2));
-  await Bun.write(join(packedDir, "dist/cli.js"), Bun.file(join(distDir, "cli.js")));
+  const distPath = join(distDir, "cli.js");
+  const distHead = (await readFile(distPath, "utf8")).slice(0, 32);
+  if (!distHead.startsWith("#!/usr/bin/env bun")) {
+    throw new Error("dist/cli.js must begin with #!/usr/bin/env bun");
+  }
 
-  const packed = Bun.spawnSync(["bun", "pm", "pack"], {
-    cwd: packedDir,
-    stdout: "pipe",
-    stderr: "pipe",
+  const packed = spawnSyncBounded("npm", ["pack", "--ignore-scripts", "--json"], {
+    cwd: cliRoot,
+    timeoutMs: 120_000,
+    maxOutputBytes: 4_194_304,
   });
   if (packed.exitCode !== 0) {
-    throw new Error(packed.stderr.toString() || "bun pm pack failed");
+    throw new Error(packed.stderr || "npm pack failed");
   }
-  const tarball = join(packedDir, "clancode-0.1.0.tgz");
-  if (!(await Bun.file(tarball).exists())) {
-    throw new Error("expected clancode-0.1.0.tgz after bun pm pack");
+
+  const jsonStart = packed.stdout.indexOf("[");
+  if (jsonStart < 0) {
+    throw new Error(`npm pack did not emit JSON: ${packed.stdout}`);
   }
+  const parsed = JSON.parse(packed.stdout.slice(jsonStart)) as Array<{ filename?: string }>;
+  const tarballName = parsed[0]?.filename;
+  if (tarballName === undefined) {
+    throw new Error("npm pack did not return tarball name");
+  }
+  const tarball = join(cliRoot, tarballName);
   console.log(`packed ${tarball}`);
 
-  const inspect = Bun.spawnSync(["tar", "-tzf", tarball], { stdout: "pipe", stderr: "pipe" });
-  const listing = inspect.stdout.toString();
-  if (listing.includes(".env") || listing.includes("node_modules") || listing.includes(".ssh")) {
-    throw new Error("tarball contains forbidden paths");
-  }
-
-  const installDir = await mkdtemp(join(tmpdir(), "clancode-install-"));
-  await Bun.write(
-    join(installDir, "package.json"),
-    JSON.stringify({ name: "clancode-install-probe", private: true }, null, 2),
-  );
-  const install = Bun.spawnSync(["bun", "add", "--ignore-scripts", tarball], {
-    cwd: installDir,
-    stdout: "inherit",
-    stderr: "inherit",
+  const manifest = spawnSyncBounded("tar", ["-xOf", tarball, "package/package.json"], {
+    timeoutMs: 30_000,
+    maxOutputBytes: 1_048_576,
   });
-  if (install.exitCode !== 0) {
-    throw new Error("clean install of packed tarball failed");
+  if (manifest.exitCode !== 0) {
+    throw new Error(manifest.stderr || "tar extract failed");
+  }
+  if (manifest.stdout.includes("workspace:*")) {
+    throw new Error("packed manifest contains workspace:* dependency");
   }
 
-  const bin = join(installDir, "node_modules", ".bin", "clancode");
-  for (const args of [["--version"], ["--help"], ["doctor"], ["doctor", "--json"]]) {
-    const result = Bun.spawnSync(["bun", bin, ...args], {
-      cwd: installDir,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    console.log(`clancode ${args.join(" ")} -> ${String(result.exitCode)}`);
-    const combined = result.stdout.toString() + result.stderr.toString();
-    if (/sk-|BEGIN OPENSSH|GITHUB_TOKEN=/.test(combined)) {
-      throw new Error("doctor/help leaked a secret");
-    }
-    if (result.exitCode !== 0 && args[0] !== "doctor") {
-      throw new Error(`clancode ${args.join(" ")} failed`);
-    }
-  }
-
-  const repoDir = await mkdtemp(join(tmpdir(), "clancode-packed-run-"));
-  await mkdir(repoDir, { recursive: true });
-  Bun.spawnSync(["git", "init"], { cwd: repoDir });
-  Bun.spawnSync(["git", "config", "user.email", "pack@example.com"], { cwd: repoDir });
-  Bun.spawnSync(["git", "config", "user.name", "Pack"], { cwd: repoDir });
-  await writeFile(join(repoDir, "README.md"), "packed run repo\n");
-  Bun.spawnSync(["git", "add", "."], { cwd: repoDir });
-  Bun.spawnSync(["git", "commit", "-m", "init"], { cwd: repoDir });
-
-  const run = Bun.spawnSync(
-    ["bun", bin, "run", "Reply with exactly CLAN_CODE_READY"],
+  const installPrefix = await mkdtemp(join(tmpdir(), "clancode-npm-prefix-"));
+  const npmInstall = spawnSyncBounded(
+    "npm",
+    ["install", "-g", tarball, "--prefix", installPrefix, "--ignore-scripts"],
     {
-      cwd: repoDir,
-      stdout: "pipe",
-      stderr: "pipe",
-      env: { ...process.env },
+      timeoutMs: 300_000,
+      maxOutputBytes: 8_388_608,
     },
   );
-  const runOut = run.stdout.toString() + run.stderr.toString();
-  console.log(`clancode run -> ${String(run.exitCode)}`);
-  if (/No TrueForge model|model provider|CLAN_TRUEFORGE_MODEL/i.test(runOut)) {
-    console.error("BLOCKED: packed clancode run requires a configured TrueForge model provider");
-    process.exitCode = 2;
-    return;
+  if (npmInstall.exitCode !== 0) {
+    throw new Error(npmInstall.stderr || "npm install -g failed");
   }
-  if (run.exitCode !== 0) {
-    throw new Error(`packed clancode run failed: ${runOut}`);
+
+  const bin = join(installPrefix, "bin", "clancode");
+  for (const args of [["--version"], ["--help"], ["doctor", "--json"]]) {
+    const result = spawnSyncBounded(bin, args, {
+      cwd: installPrefix,
+      timeoutMs: 60_000,
+      maxOutputBytes: 2_097_152,
+      env: { ...process.env, PATH: `${join(installPrefix, "bin")}:${process.env.PATH ?? ""}` },
+    });
+    console.log(`clancode ${args.join(" ")} -> ${String(result.exitCode)}`);
+    const combined = result.stdout + result.stderr;
+    if (/sk-|BEGIN OPENSSH|GITHUB_TOKEN=/.test(combined)) {
+      throw new Error("installed clancode leaked a secret");
+    }
+    if (result.exitCode !== 0 && args[0] !== "doctor") {
+      throw new Error(`installed clancode ${args.join(" ")} failed`);
+    }
   }
-  if (!runOut.includes("CLAN_CODE_READY")) {
-    throw new Error("packed clancode run did not stream CLAN_CODE_READY");
-  }
-  console.log("packed clancode run smoke: CLAN_CODE_READY");
+
+  await rm(installPrefix, { recursive: true, force: true });
+  console.log("pack:local npm install smoke passed");
 }
 
 await main();

@@ -79,7 +79,7 @@ Use the existing structure instead of creating parallel implementations.
 │   └── visualization-assets.md  # Kenney/font/audio inventory
 ├── clan-cli/                    # Independent nested Bun workspace
 │   ├── packages/
-│   │   ├── cli/                 # @clanofagents/cli: execution + TUI
+│   │   ├── cli/                 # @clancode/cli: execution + TUI
 │   │   │   └── src/
 │   │   │       ├── main.tsx     # CLI bootstrap
 │   │   │       ├── app/         # TUI composition

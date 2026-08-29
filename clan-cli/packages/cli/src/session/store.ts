@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 export type SessionMapping = {
+  id: string;
   key: string;
   /** Stable primary repository identity (never a transient worktree path). */
   repositoryIdentity: string;
@@ -105,7 +106,22 @@ async function loadAll(): Promise<SessionMapping[]> {
     if (!Array.isArray(parsed)) {
       return [];
     }
-    return parsed.filter(isMapping);
+    const rows = parsed.filter(isMapping);
+    let migrated = false;
+    const normalized = rows.map((row) => {
+      if (typeof row.id === "string" && row.id.length > 0) {
+        return row;
+      }
+      migrated = true;
+      return {
+        ...row,
+        id: crypto.randomUUID().slice(0, 8),
+      };
+    });
+    if (migrated) {
+      await saveAll(normalized);
+    }
+    return normalized;
   } catch {
     return [];
   }
@@ -140,9 +156,16 @@ export async function listSessions(): Promise<SessionMapping[]> {
 export async function saveMapping(mapping: SessionMapping): Promise<void> {
   await withLock(async () => {
     const rows = await loadAll();
-    const next = rows.filter((row) => row.key !== mapping.key);
+    const next = rows.filter((row) => row.id !== mapping.id);
     next.push(mapping);
     await saveAll(next);
+  });
+}
+
+export async function resolveMappingById(id: string): Promise<SessionMapping | undefined> {
+  return await withLock(async () => {
+    const rows = await loadAll();
+    return rows.find((row) => row.id === id || row.id.startsWith(id));
   });
 }
 
@@ -179,9 +202,11 @@ export async function findResumeMapping(input: {
   });
 }
 
-export async function invalidateMapping(key: string): Promise<void> {
+export async function invalidateMapping(idOrKey: string): Promise<void> {
   await withLock(async () => {
     const rows = await loadAll();
-    await saveAll(rows.filter((row) => row.key !== key));
+    await saveAll(
+      rows.filter((row) => row.id !== idOrKey && row.key !== idOrKey),
+    );
   });
 }

@@ -4,12 +4,16 @@ import { createRoot } from "@opentui/react/renderer";
 import { Header } from "../components/header.tsx";
 import { formatDoctor, runDoctor } from "../doctor/doctor.ts";
 import {
-  listSessions,
   RunSupervisor,
   type PendingApproval,
   type RunStatus,
 } from "../supervisor/supervisor.ts";
-import type { RunEvent } from "@clanofagents/protocol";
+import { listSessions } from "../session/store.ts";
+import { formatSessions } from "../session/format.ts";
+import { loadTrueforgeConfig } from "../trueforge/config.ts";
+import { createAgentClient } from "../trueforge/agent.ts";
+import { listAvailableModels, selectModel } from "../models/resolve.ts";
+import type { RunEvent } from "@clancode/protocol";
 
 type Props = {
   repo?: string;
@@ -205,7 +209,7 @@ async function handleSlash(
         ...current,
         {
           kind: "system",
-          text: "/plan /build /cancel /status /diff /validate /sessions /resume /doctor /approve /deny /commit /push /pr /exit",
+          text: "/plan /build /new /cancel /status /diff /validate /sessions /resume /models /model /doctor /approve /deny /commit /push /pr /exit",
         },
       ]);
       return;
@@ -252,19 +256,49 @@ async function handleSlash(
     }
     case "/sessions": {
       const rows = await listSessions();
+      const formatted = formatSessions(rows);
       setLines((current) => [
         ...current,
-        { kind: "system", text: JSON.stringify(rows.map((row) => row.key)) },
+        ...formatted.map((row) => ({ kind: "system" as const, text: row.line })),
       ]);
       return;
     }
-    case "/resume":
-      await supervisor.resumeStoredSession();
+    case "/new":
+      await supervisor.startNewConversation();
+      setLines((current) => [
+        ...current,
+        { kind: "system", text: `new session ${supervisor.sessionId ?? "none"}` },
+      ]);
+      return;
+    case "/models": {
+      const client = createAgentClient(loadTrueforgeConfig());
+      const models = await listAvailableModels(client);
+      setLines((current) => [
+        ...current,
+        { kind: "system", text: models.length > 0 ? models.join(", ") : "(no models)" },
+      ]);
+      return;
+    }
+    case "/model": {
+      const name = text.slice("/model".length).trim();
+      if (name.length === 0) {
+        setLines((current) => [...current, { kind: "system", text: "Usage: /model <name>" }]);
+        return;
+      }
+      const client = createAgentClient(loadTrueforgeConfig());
+      await selectModel(client, name);
+      setLines((current) => [...current, { kind: "system", text: `model set to ${name}` }]);
+      return;
+    }
+    case "/resume": {
+      const selector = text.slice("/resume".length).trim();
+      await supervisor.resumeStoredSession(selector.length > 0 ? selector : undefined);
       setLines((current) => [
         ...current,
         { kind: "system", text: `resumed ${supervisor.sessionId ?? "none"}` },
       ]);
       return;
+    }
     case "/doctor": {
       const report = await runDoctor();
       setLines((current) => [...current, { kind: "system", text: formatDoctor(report) }]);
@@ -279,7 +313,7 @@ async function handleSlash(
       setApproval(undefined);
       return;
     case "/commit": {
-      const message = text.slice("/commit".length).trim() || "clan code";
+      const message = text.slice("/commit".length).trim() || "ClanCode";
       await supervisor.commit(message, true);
       setLines((current) => [...current, { kind: "system", text: `committed: ${message}` }]);
       return;
@@ -289,7 +323,7 @@ async function handleSlash(
       setLines((current) => [...current, { kind: "system", text: "pushed task branch" }]);
       return;
     case "/pr": {
-      const title = text.slice("/pr".length).trim() || "Clan Code task";
+      const title = text.slice("/pr".length).trim() || "ClanCode task";
       await supervisor.createPr(title, true);
       setLines((current) => [...current, { kind: "system", text: `pull request: ${title}` }]);
       return;

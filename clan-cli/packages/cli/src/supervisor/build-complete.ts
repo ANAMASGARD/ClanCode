@@ -1,4 +1,4 @@
-import type { RunEventType } from "@clanofagents/protocol";
+import type { RunEventType } from "@clancode/protocol";
 import type { AgentMode } from "../tools/registry.ts";
 
 export type BuildFinalizeDeps = {

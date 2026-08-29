@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { RunEventType } from "@clanofagents/protocol";
+import type { RunEventType } from "@clancode/protocol";
 import { completeSuccessfulTurn } from "./build-complete.ts";
 
 describe("build turn finalization", () => {

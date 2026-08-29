@@ -1,4 +1,5 @@
-import { readdir, stat } from "node:fs/promises";
+import { join } from "node:path";
+import { lstat, readdir, stat } from "node:fs/promises";
 import {
   type RepositoryContext,
   resolveWithinRepo,
@@ -7,10 +8,17 @@ import {
 import { fail, isSecretPath, ok, TOOL_LIMITS, type ToolResult } from "./types.ts";
 import { runCommand, sanitizeEnv } from "../process/runner.ts";
 import { diffMetadata } from "./write.ts";
+import { searchRepository } from "../search/index.ts";
+import { shouldSkipRelativePath } from "../search/ignore.ts";
 
 function relativeToRoot(root: string, absolute: string): string {
   return absolute === root ? "." : absolute.slice(root.length + 1);
 }
+
+export type DirectoryEntry = {
+  name: string;
+  type: "file" | "directory" | "symlink";
+};
 
 export async function repoInfo(repo: RepositoryContext): Promise<ToolResult<RepositoryContext>> {
   return ok(repo);
@@ -19,7 +27,7 @@ export async function repoInfo(repo: RepositoryContext): Promise<ToolResult<Repo
 export async function listDirectory(
   repo: RepositoryContext,
   userPath: string,
-): Promise<ToolResult<{ entries: string[]; truncated: boolean }>> {
+): Promise<ToolResult<{ entries: DirectoryEntry[]; truncated: boolean }>> {
   try {
     const resolved = await resolveWithinRepo(repo, userPath, { mustExist: true });
     const rel = relativeToRoot(repo.root, resolved);
@@ -27,11 +35,26 @@ export async function listDirectory(
       return fail("secret_path", "Refusing to list a protected path");
     }
     const names = await readdir(resolved);
+    const entries: DirectoryEntry[] = [];
+    for (const name of names) {
+      if (isSecretPath(name)) {
+        continue;
+      }
+      const child = join(resolved, name);
+      const info = await lstat(child);
+      let type: DirectoryEntry["type"] = "file";
+      if (info.isDirectory()) {
+        type = "directory";
+      } else if (info.isSymbolicLink()) {
+        type = "symlink";
+      }
+      entries.push({ name, type });
+      if (entries.length >= TOOL_LIMITS.maxDirectoryEntries) {
+        break;
+      }
+    }
     const truncated = names.length > TOOL_LIMITS.maxDirectoryEntries;
-    return ok({
-      entries: names.slice(0, TOOL_LIMITS.maxDirectoryEntries),
-      truncated,
-    }, truncated);
+    return ok({ entries, truncated }, truncated);
   } catch (error) {
     return mapBoundary(error);
   }
@@ -70,20 +93,27 @@ export async function readFileTool(
 export async function globTool(
   repo: RepositoryContext,
   pattern: string,
+  basePath?: string,
 ): Promise<ToolResult<{ matches: string[] }>> {
+  const scanRoot = basePath
+    ? await resolveWithinRepo(repo, basePath, { mustExist: true })
+    : repo.root;
   const glob = new Bun.Glob(pattern);
   const matches: string[] = [];
   let truncated = false;
-  for await (const match of glob.scan({ cwd: repo.root, onlyFiles: true })) {
-    if (isSecretPath(match)) {
+  const relPrefix =
+    scanRoot === repo.root ? "" : `${relativeToRoot(repo.root, scanRoot)}/`;
+  for await (const match of glob.scan({ cwd: scanRoot, onlyFiles: true })) {
+    const rel = relPrefix.length > 0 ? `${relPrefix}${match}` : match;
+    if (shouldSkipRelativePath(rel)) {
       continue;
     }
     try {
-      await resolveWithinRepo(repo, match, { mustExist: true });
+      await resolveWithinRepo(repo, rel, { mustExist: true });
     } catch {
       continue;
     }
-    matches.push(match);
+    matches.push(rel);
     if (matches.length >= TOOL_LIMITS.maxDirectoryEntries) {
       truncated = true;
       break;
@@ -95,45 +125,28 @@ export async function globTool(
 export async function grepTool(
   repo: RepositoryContext,
   pattern: string,
-  globPattern?: string,
-): Promise<ToolResult<{ matches: Array<{ path: string; line: number; text: string }> }>> {
-  const glob = new Bun.Glob(globPattern ?? "**/*.{ts,tsx,js,jsx,json,md}");
-  const matches: Array<{ path: string; line: number; text: string }> = [];
-  let regex: RegExp;
+  options?: {
+    path?: string;
+    include?: string;
+    glob?: string;
+    caseSensitive?: boolean;
+    fixedString?: boolean;
+    maxMatches?: number;
+  },
+): Promise<ToolResult<{ matches: Array<{ path: string; line: number; text: string; column?: number }> }>> {
   try {
-    regex = new RegExp(pattern);
-  } catch {
-    return fail("bad_pattern", "Invalid grep pattern");
+    const result = await searchRepository(repo, {
+      pattern,
+      path: options?.path,
+      include: options?.include ?? options?.glob,
+      caseSensitive: options?.caseSensitive,
+      fixedString: options?.fixedString,
+      maxMatches: options?.maxMatches,
+    });
+    return ok({ matches: result.matches }, result.truncated);
+  } catch (error) {
+    return fail("search_failed", error instanceof Error ? error.message : String(error));
   }
-  let truncated = false;
-  for await (const match of glob.scan({ cwd: repo.root, onlyFiles: true })) {
-    if (isSecretPath(match)) {
-      continue;
-    }
-    let resolved: string;
-    try {
-      resolved = await resolveWithinRepo(repo, match, { mustExist: true });
-    } catch {
-      continue;
-    }
-    const file = Bun.file(resolved);
-    if (file.size > TOOL_LIMITS.maxFileBytes) {
-      continue;
-    }
-    const text = await file.text();
-    const lines = text.split("\n");
-    for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i];
-      if (line !== undefined && regex.test(line)) {
-        matches.push({ path: match, line: i + 1, text: line.slice(0, 400) });
-        if (matches.length >= TOOL_LIMITS.maxGrepMatches) {
-          truncated = true;
-          return ok({ matches }, true);
-        }
-      }
-    }
-  }
-  return ok({ matches }, truncated);
 }
 
 export async function gitStatusTool(

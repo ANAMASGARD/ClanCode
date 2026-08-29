@@ -49,6 +49,7 @@ describe("build session resume metadata", () => {
         model,
       });
       await saveMapping({
+        id: "resume-test-1",
         key,
         repositoryIdentity: primary.identity,
         agentProfile: "build",

@@ -111,7 +111,7 @@ The repository is intentionally split by responsibility.
 │   └── visualization-assets.md  # Kenney/font/audio inventory
 ├── clan-cli/                    # Independent nested Bun workspace
 │   ├── packages/
-│   │   ├── cli/                 # @clanofagents/cli: local execution + TUI
+│   │   ├── cli/                 # @clancode/cli: local execution + TUI
 │   │   │   └── src/
 │   │   │       ├── main.tsx     # CLI bootstrap
 │   │   │       ├── app/         # TUI composition
@@ -142,11 +142,11 @@ than in this stable contract.
 
 ### 4.1. Package and Workspace Naming
 
-- Product brand: **Clan Code**.
-- Web application package: `clanofagents`.
-- CLI package scope: `@clanofagents/*`.
-- Local CLI package: `@clanofagents/cli`.
-- Intended published CLI binary: `clan` when a publishable CLI entrypoint is added.
+- Product brand: **ClanCode**.
+- Web application package: `clancode`.
+- CLI package scope: `@clancode/*`.
+- Local CLI package: `@clancode/cli`.
+- Published CLI binary: **`clancode`** (`npm install -g @clancode/cli`).
 - `packages/protocol` is the planned home for dependency-light contracts shared by
   the web application and CLI. It must not import either implementation.
 

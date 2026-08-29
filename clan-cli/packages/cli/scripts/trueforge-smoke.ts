@@ -13,7 +13,7 @@ import {
 async function main(): Promise<void> {
   const config = loadTrueforgeConfig();
 
-  console.log("Clan Code — TrueForge smoke");
+  console.log("ClanCode — TrueForge smoke");
   console.log(`  Bun:       ${Bun.version}`);
   console.log(`  Node bin:  ${config.nodeBin}`);
   console.log(`  CLI path:  ${config.cliPath}`);

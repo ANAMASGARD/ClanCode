@@ -1,9 +1,15 @@
 import { RunSupervisor } from "../supervisor/supervisor.ts";
 import { formatDoctor, runDoctor } from "../doctor/doctor.ts";
 import { startInteractiveUi } from "./tui.tsx";
+import { runConnectCommand } from "./connect.ts";
 import type { AgentMode } from "../tools/registry.ts";
+import { createAgentClient } from "../trueforge/agent.ts";
+import { loadTrueforgeConfig } from "../trueforge/config.ts";
+import { ensureRuntime } from "../trueforge/runtime.ts";
+import { assertNodeRuntime } from "../trueforge/config.ts";
+import { listAvailableModels, selectModel } from "../models/resolve.ts";
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.0-beta.1";
 
 export async function runCli(argv: readonly string[]): Promise<number> {
   const args = argv.slice(2);
@@ -24,6 +30,59 @@ export async function runCli(argv: readonly string[]): Promise<number> {
       console.log(formatDoctor(report));
     }
     return report.ok ? 0 : 1;
+  }
+  if (args[0] === "connect") {
+    return await runConnectCommand();
+  }
+  if (args[0] === "new") {
+    const supervisor = new RunSupervisor();
+    try {
+      await supervisor.start(flagValue(args.slice(1), "--repo"));
+      await supervisor.startNewConversation();
+      console.log(`New session: ${supervisor.sessionId ?? "none"}`);
+      return 0;
+    } finally {
+      await supervisor.stop();
+    }
+  }
+  if (args[0] === "models") {
+    const config = loadTrueforgeConfig();
+    assertNodeRuntime(config.nodeBin);
+    const handle = await ensureRuntime(config);
+    const client = createAgentClient(config);
+    try {
+      const models = await listAvailableModels(client);
+      for (const name of models) {
+        console.log(name);
+      }
+      return 0;
+    } finally {
+      if (handle.mode === "spawned") {
+        const { stopRuntime } = await import("../trueforge/runtime.ts");
+        await stopRuntime(handle);
+      }
+    }
+  }
+  if (args[0] === "model") {
+    const name = args[1];
+    if (name === undefined || name.length === 0) {
+      console.error("Usage: clancode model <name>");
+      return 2;
+    }
+    const config = loadTrueforgeConfig();
+    assertNodeRuntime(config.nodeBin);
+    const handle = await ensureRuntime(config);
+    const client = createAgentClient(config);
+    try {
+      await selectModel(client, name);
+      console.log(`Preferred model set to ${name}`);
+      return 0;
+    } finally {
+      if (handle.mode === "spawned") {
+        const { stopRuntime } = await import("../trueforge/runtime.ts");
+        await stopRuntime(handle);
+      }
+    }
   }
   if (args[0] === "run") {
     const rest = args.slice(1);
@@ -105,6 +164,10 @@ Usage:
   clancode                       Interactive OpenTUI harness
   clancode run "task"            Headless run (same supervisor)
   clancode run --mode build "t"  Headless Build mode (isolated worktree)
+  clancode connect                 Outbound control-plane connection
+  clancode new [--repo PATH]       Start a fresh TrueForge session
+  clancode models                  List TrueForge models
+  clancode model <name>            Set preferred model
   clancode doctor [--json]       Diagnostics (never prints secrets)
   clancode --version
   clancode --help

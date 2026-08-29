@@ -4,7 +4,7 @@
     "jsx": "react-jsx",
     "jsxImportSource": "@opentui/react",
     "paths": {
-      "@clanofagents/protocol": ["../protocol/src/index.ts"]
+      "@clancode/protocol": ["../protocol/src/index.ts"]
     }
   }
 }
