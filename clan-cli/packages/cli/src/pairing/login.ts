@@ -62,9 +62,11 @@ export async function openBrowser(url: string): Promise<void> {
   const args = platform === "win32" ? ["/c", "start", "", url] : [url];
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, { stdio: "ignore", detached: true });
-    child.on("error", reject);
-    child.unref();
-    resolve();
+    child.once("error", reject);
+    child.once("spawn", () => {
+      child.unref();
+      resolve();
+    });
   }).catch(() => {
     console.log(`Open this URL in your browser:\n${url}`);
   });
@@ -94,6 +96,7 @@ export async function pairDeviceInteractive(): Promise<PairDeviceResult> {
   await openBrowser(start.verifyUrl);
 
   const deadline = Date.now() + start.expiresIn * 1000;
+  let pollBackoffMs = start.interval * 1000;
   while (Date.now() < deadline) {
     let poll: PollResponse;
     try {
@@ -122,8 +125,13 @@ export async function pairDeviceInteractive(): Promise<PairDeviceResult> {
     if (poll.status === "expired") {
       return "expired";
     }
-    const waitMs = start.interval * 1000;
-    await sleep(waitMs);
+    if (poll.status === "slow_down") {
+      pollBackoffMs = Math.min(pollBackoffMs * 2, start.interval * 1000 * 8);
+      await sleep(pollBackoffMs);
+      continue;
+    }
+    pollBackoffMs = start.interval * 1000;
+    await sleep(pollBackoffMs);
   }
 
   return "timeout";

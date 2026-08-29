@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { denyPairingChallenge } from "@/app/lib/pairing/service";
+import { isValidUserCode } from "@/app/lib/pairing/validation";
 
 export async function POST(request: Request) {
   const { isAuthenticated, userId } = await auth();
@@ -13,7 +14,7 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
   const userCode =
     typeof body === "object" &&
@@ -22,8 +23,8 @@ export async function POST(request: Request) {
       ? (body as { userCode: string }).userCode
       : undefined;
 
-  if (userCode === undefined || userCode.length === 0) {
-    return NextResponse.json({ error: "userCode required" }, { status: 400 });
+  if (userCode === undefined || !isValidUserCode(userCode)) {
+    return NextResponse.json({ error: "invalid_user_code" }, { status: 400 });
   }
 
   const result = await denyPairingChallenge({ userCode, clerkUserId: userId });

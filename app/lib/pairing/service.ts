@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 
 import { getDb } from "@/app/lib/db";
 import {
@@ -272,6 +272,7 @@ export async function approvePairingChallenge(input: {
       and(
         eq(pairingChallenges.id, challenge.id),
         eq(pairingChallenges.status, "pending"),
+        gte(pairingChallenges.expiresAt, now),
       ),
     )
     .returning({ id: pairingChallenges.id });
@@ -346,6 +347,7 @@ export async function denyPairingChallenge(input: {
       and(
         eq(pairingChallenges.id, challenge.id),
         eq(pairingChallenges.status, "pending"),
+        gte(pairingChallenges.expiresAt, now),
       ),
     )
     .returning({ id: pairingChallenges.id });

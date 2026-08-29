@@ -10,12 +10,17 @@ describe("pairing login gate", () => {
 
   afterEach(async () => {
     delete process.env.CLANCODE_DEVICE_TOKEN;
+    delete process.env.CLANCODE_CONTROL_URL;
+    delete process.env.CLANCODE_DEVICE_ID;
     delete process.env.XDG_STATE_HOME;
     await rm(stateHome, { recursive: true, force: true });
   });
 
-  test("hasDeviceCredentials respects env override", async () => {
+  test("hasDeviceCredentials requires full env override", async () => {
     process.env.CLANCODE_DEVICE_TOKEN = "env-token";
+    await expect(hasDeviceCredentials()).resolves.toBe(false);
+    process.env.CLANCODE_CONTROL_URL = "http://localhost:3001";
+    process.env.CLANCODE_DEVICE_ID = "550e8400-e29b-41d4-a716-446655440000";
     await expect(hasDeviceCredentials()).resolves.toBe(true);
   });
 
@@ -24,7 +29,7 @@ describe("pairing login gate", () => {
     await mkdir(join(stateHome, "clancode"), { recursive: true });
     await saveStoredCredentials({
       deviceToken: "stored",
-      deviceId: "device-1",
+      deviceId: "550e8400-e29b-41d4-a716-446655440001",
       controlUrl: "http://localhost:3001",
       pairedAt: new Date().toISOString(),
     });
@@ -33,6 +38,8 @@ describe("pairing login gate", () => {
 
   test("ensureDevicePaired skips when already paired", async () => {
     process.env.CLANCODE_DEVICE_TOKEN = "env-token";
+    process.env.CLANCODE_CONTROL_URL = "http://localhost:3001";
+    process.env.CLANCODE_DEVICE_ID = "550e8400-e29b-41d4-a716-446655440002";
     await expect(ensureDevicePaired()).resolves.toBe(0);
   });
 });

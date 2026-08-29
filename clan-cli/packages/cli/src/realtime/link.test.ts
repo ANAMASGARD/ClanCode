@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 
 import { startControlPlaneLink } from "./link.ts";
 import type { RealtimeClient } from "./client.ts";
@@ -47,7 +49,16 @@ describe("control plane link", () => {
 
   test("reports connected after a successful handshake", async () => {
     const previousHome = process.env.XDG_STATE_HOME;
-    process.env.CLANCODE_DEVICE_TOKEN = "token";
+    process.env.XDG_STATE_HOME = join("/tmp", `clancode-link-${crypto.randomUUID()}`);
+    await mkdir(join(process.env.XDG_STATE_HOME, "clancode"), { recursive: true });
+    await import("../pairing/store.ts").then(({ saveStoredCredentials }) =>
+      saveStoredCredentials({
+        deviceToken: "token",
+        deviceId: "550e8400-e29b-41d4-a716-446655440020",
+        controlUrl: "http://localhost:3001",
+        pairedAt: new Date().toISOString(),
+      }),
+    );
     const states: string[] = [];
     const client = fakeClient();
     const link = startControlPlaneLink({
@@ -70,6 +81,5 @@ describe("control plane link", () => {
     } else {
       process.env.XDG_STATE_HOME = previousHome;
     }
-    delete process.env.CLANCODE_DEVICE_TOKEN;
   });
 });

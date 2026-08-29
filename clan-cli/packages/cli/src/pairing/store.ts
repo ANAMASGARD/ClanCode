@@ -58,12 +58,13 @@ export async function saveStoredCredentials(
 }
 
 export async function hasStoredDeviceCredentials(): Promise<boolean> {
-  const envToken = process.env.CLANCODE_DEVICE_TOKEN;
-  if (envToken !== undefined && envToken.length > 0) {
+  const { resolveRealtimeCredentials } = await import("../realtime/credentials.ts");
+  try {
+    await resolveRealtimeCredentials();
     return true;
+  } catch {
+    return false;
   }
-  const stored = await loadStoredCredentials();
-  return stored !== undefined && stored.deviceToken.length > 0;
 }
 
 export function resolveWebUrl(): string {

@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import {
   CompositeCredentialsProvider,
-  resolveConnectUrl,
+  resolveRealtimeCredentials,
 } from "./credentials.ts";
 import { saveStoredCredentials } from "../pairing/store.ts";
 
@@ -14,14 +14,25 @@ describe("realtime credentials", () => {
   afterEach(async () => {
     delete process.env.CLANCODE_DEVICE_TOKEN;
     delete process.env.CLANCODE_CONTROL_URL;
+    delete process.env.CLANCODE_DEVICE_ID;
     delete process.env.XDG_STATE_HOME;
     await rm(stateHome, { recursive: true, force: true });
   });
 
-  test("env override wins", async () => {
+  test("env override requires token, url, and device id together", async () => {
     process.env.CLANCODE_DEVICE_TOKEN = "env-token";
-    const provider = new CompositeCredentialsProvider();
-    await expect(provider.getToken()).resolves.toBe("env-token");
+    await expect(resolveRealtimeCredentials()).rejects.toThrow(/together/);
+  });
+
+  test("full env override resolves atomically", async () => {
+    process.env.CLANCODE_DEVICE_TOKEN = "env-token";
+    process.env.CLANCODE_CONTROL_URL = "http://localhost:4001/";
+    process.env.CLANCODE_DEVICE_ID = "550e8400-e29b-41d4-a716-446655440000";
+    await expect(resolveRealtimeCredentials()).resolves.toEqual({
+      token: "env-token",
+      deviceId: "550e8400-e29b-41d4-a716-446655440000",
+      controlUrl: "http://localhost:4001",
+    });
   });
 
   test("stored credentials are used when env is unset", async () => {
@@ -29,13 +40,30 @@ describe("realtime credentials", () => {
     await mkdir(join(stateHome, "clancode"), { recursive: true });
     await saveStoredCredentials({
       deviceToken: "stored-token",
-      deviceId: "device-1",
+      deviceId: "550e8400-e29b-41d4-a716-446655440001",
       controlUrl: "http://localhost:3001",
       pairedAt: new Date().toISOString(),
     });
     const provider = new CompositeCredentialsProvider();
     await expect(provider.getToken()).resolves.toBe("stored-token");
-    await expect(resolveConnectUrl()).resolves.toBe("http://localhost:3001");
+    await expect(resolveRealtimeCredentials()).resolves.toMatchObject({
+      token: "stored-token",
+      deviceId: "550e8400-e29b-41d4-a716-446655440001",
+      controlUrl: "http://localhost:3001",
+    });
+  });
+
+  test("env token cannot mix with stored url or device id", async () => {
+    process.env.XDG_STATE_HOME = stateHome;
+    await mkdir(join(stateHome, "clancode"), { recursive: true });
+    await saveStoredCredentials({
+      deviceToken: "stored-token",
+      deviceId: "550e8400-e29b-41d4-a716-446655440002",
+      controlUrl: "http://localhost:3001",
+      pairedAt: new Date().toISOString(),
+    });
+    process.env.CLANCODE_DEVICE_TOKEN = "env-token";
+    await expect(resolveRealtimeCredentials()).rejects.toThrow(/together/);
   });
 
   test("missing credentials fail closed", async () => {
@@ -49,7 +77,7 @@ describe("realtime credentials", () => {
     process.env.XDG_STATE_HOME = stateHome;
     await saveStoredCredentials({
       deviceToken: "stored-token",
-      deviceId: "device-1",
+      deviceId: "550e8400-e29b-41d4-a716-446655440003",
       controlUrl: "http://localhost:3001",
       pairedAt: new Date().toISOString(),
     });

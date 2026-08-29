@@ -3,7 +3,8 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 const USER_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const DEVICE_TOKEN_BYTES = 32;
 const DEVICE_CODE_BYTES = 32;
-const USER_CODE_LENGTH = 8;
+export const USER_CODE_LENGTH = 8;
+export const DEVICE_CODE_LENGTH = 43;
 
 export function hashToken(token: string): string {
   return createHash("sha256").update(token, "utf8").digest("hex");

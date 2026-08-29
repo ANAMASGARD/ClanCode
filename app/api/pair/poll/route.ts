@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 
 import { pollPairingChallenge } from "@/app/lib/pairing/service";
+import { pairingInternalError } from "@/app/lib/pairing/api-errors";
+import { isValidDeviceCode } from "@/app/lib/pairing/validation";
 
 export async function POST(request: Request) {
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
   const deviceCode =
     typeof body === "object" &&
@@ -16,8 +18,8 @@ export async function POST(request: Request) {
       ? (body as { deviceCode: string }).deviceCode
       : undefined;
 
-  if (deviceCode === undefined || deviceCode.length === 0) {
-    return NextResponse.json({ error: "deviceCode required" }, { status: 400 });
+  if (deviceCode === undefined || !isValidDeviceCode(deviceCode)) {
+    return NextResponse.json({ error: "invalid_device_code" }, { status: 400 });
   }
 
   try {
@@ -32,7 +34,6 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ status: result.status });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Poll failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return pairingInternalError("poll", error);
   }
 }

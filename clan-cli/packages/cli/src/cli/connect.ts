@@ -1,15 +1,12 @@
 import { ConnectSession } from "../realtime/session.ts";
 import { connectRealtimeClient } from "../realtime/client.ts";
-import {
-  CompositeCredentialsProvider,
-  resolveConnectUrl,
-} from "../realtime/credentials.ts";
+import { resolveRealtimeCredentials } from "../realtime/credentials.ts";
 
 export async function runConnectCommand(): Promise<number> {
-  const url = await resolveConnectUrl();
+  const credentials = await resolveRealtimeCredentials();
   const client = await connectRealtimeClient({
-    url,
-    credentials: new CompositeCredentialsProvider(),
+    url: credentials.controlUrl,
+    credentials: { getToken: async () => credentials.token },
   });
   const session = new ConnectSession();
   await session.start(client);

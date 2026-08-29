@@ -1,6 +1,6 @@
 # ClanCode — Project Memory
 
-**Last updated:** 2026-08-29 (pairing polish, TUI refresh, auto-connect)
+**Last updated:** 2026-08-29 (PR #19 Qodo review fixes)
 
 ## What This Repo Is
 
@@ -72,6 +72,24 @@ Two independent indicators:
 - Device lifecycle: `pending` (after browser approve) → `active` (after CLI poll) → `revoked`.
 - Challenge lifecycle: `pending` → `approved`/`denied`/`expired`/`consumed`.
 
+### Qodo review fixes (PR #19, pending re-review)
+
+All nine Qodo threads addressed in code:
+
+| Finding | Fix |
+|---------|-----|
+| Token + deviceId + URL mixing | `resolveRealtimeCredentials()` — atomic stored bundle or full env triple (`CLANCODE_DEVICE_TOKEN` + `CLANCODE_CONTROL_URL` + `CLANCODE_DEVICE_ID`) |
+| Gateway async failures | `app/lib/realtime/gateway.ts` — `runDetached()` catches all async paths; presence tracked after DB write |
+| Gateway untested | `app/lib/realtime/gateway.test.ts` — auth, presence, heartbeat, mismatch, revocation |
+| Pair poll input validation | `app/lib/pairing/validation.ts` — strict deviceCode/userCode/deviceId formats |
+| Raw API error leakage | `app/lib/pairing/api-errors.ts` — generic `internal_error` + requestId, server-side log |
+| Approval/expiry race | `approvePairingChallenge` / `denyPairingChallenge` — `gte(expiresAt, now)` in UPDATE WHERE |
+| openBrowser fallback | `login.ts` — wait for `spawn` event before resolve |
+| slow_down ignored | `login.ts` — exponential backoff up to 8× interval |
+| Production gateway monolith | `scripts/realtime-server.ts` → thin wrapper over `createRealtimeGateway()` |
+
+**Merge gate (not yet complete):** Qodo re-review → 0 unresolved threads; manual E2E checklist on PR #19; then merge.
+
 ### Bug fixes in this slice
 
 1. **`/api/pair/approve` 500** — Neon HTTP driver lacks transactions; `approvePairingChallenge` and `pollPairingChallenge` rewritten as sequential queries.
@@ -116,7 +134,19 @@ socket.on("command", ...)
 
 Production Socket.IO host is **decision later** (local Bun `:3001` for development; Vercel WebSockets are possible with instance-pinned Fluid compute but need reconnect/durable presence design).
 
-### Validation (2026-08-29)
+### Validation (2026-08-29, post-Qodo fixes)
+
+| Check | Result |
+|-------|--------|
+| `bun run test:pairing` (web pairing + gateway) | 15 pass |
+| `bun run build` (web) | pass |
+| `bun run lint` | pass (0 errors) |
+| CLI typecheck + `bun test src` | 77 pass |
+| CLI `bun run build` | pass |
+| Manual E2E (login/approve/connect/revoke/deny) | **pending human run** |
+| Qodo unresolved threads | **pending re-review** |
+
+### Validation (2026-08-29, earlier)
 
 | Check | Result |
 |-------|--------|
@@ -127,11 +157,11 @@ Production Socket.IO host is **decision later** (local Bun `:3001` for developme
 | `bun test src` (CLI) | 75 pass |
 | `bun run build` (CLI) | pass |
 
-### Not built yet (next PRs)
+### Not built yet (next: PR #20)
 
-1. **Task composer → `task.start` → RunEvents in browser → approval UI**
+1. **Task composer → `task.start` → RunEvents in browser → approval UI → PR result**
 2. Neon domain tables (repositories, tasks, runs, run_events, approvals)
-3. 3D clan/island game visualization
+3. 3D clan/island game visualization (asset collection can proceed in parallel)
 4. npm registry publish
 
 ---
@@ -142,18 +172,19 @@ Full harness: supervisor, tools, worktrees, validation, Git/PR, `clancode connec
 
 **New in PR #19:**
 
-- `clancode login` / `pair`, credential store, composite credentials provider
+- `clancode login` / `pair`, credential store, **`resolveRealtimeCredentials()`** (atomic token + deviceId + URL)
 - **Auto Socket.IO link** from TUI via `realtime/link.ts`
+- **Production gateway** in `app/lib/realtime/gateway.ts` with tests
 - **TUI presentation:** `theme.ts`, `clan-art.ts` (island scene), `clan-banner.tsx`, refreshed `header.tsx`
-- Tests: `header.test.tsx`, `theme.test.ts`, `link.test.ts`, `login.test.ts`
-- `ConnectSession` uses `deviceId` from stored credentials (not random prefs id)
+- Tests: header, theme, link, login, credentials, gateway
+- `ConnectSession` uses `deviceId` from `resolveRealtimeCredentials()`
 
 Credential lookup order for realtime:
 
 ```text
-CLANCODE_DEVICE_TOKEN
+Full env override (token + url + device id together)
       ↓
-credentials.json
+credentials.json (token + deviceId + controlUrl bundle)
       ↓
 "run clancode login"
 ```

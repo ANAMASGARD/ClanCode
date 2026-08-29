@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { revokeDevice } from "@/app/lib/pairing/service";
+import { isValidDeviceId } from "@/app/lib/pairing/validation";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -14,6 +15,10 @@ export async function DELETE(_request: Request, context: RouteContext) {
   }
 
   const { id } = await context.params;
+  if (!isValidDeviceId(id)) {
+    return NextResponse.json({ error: "invalid_device_id" }, { status: 400 });
+  }
+
   const revoked = await revokeDevice({ deviceId: id, clerkUserId: userId });
   if (!revoked) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

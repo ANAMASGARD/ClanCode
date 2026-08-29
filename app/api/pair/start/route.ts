@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { startPairingChallenge } from "@/app/lib/pairing/service";
+import { pairingInternalError } from "@/app/lib/pairing/api-errors";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -23,7 +24,6 @@ export async function POST(request: Request) {
     const result = await startPairingChallenge({ hostname, platform });
     return NextResponse.json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Pairing failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return pairingInternalError("start", error);
   }
 }

@@ -1,9 +1,6 @@
 import { hasStoredDeviceCredentials } from "../pairing/store.ts";
 import { connectRealtimeClient, type RealtimeClient } from "./client.ts";
-import {
-  CompositeCredentialsProvider,
-  resolveConnectUrl,
-} from "./credentials.ts";
+import { resolveRealtimeCredentials } from "./credentials.ts";
 import { ConnectSession } from "./session.ts";
 
 export type ControlPlaneState = "offline" | "connecting" | "connected" | "error";
@@ -37,10 +34,10 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 async function defaultConnect(): Promise<RealtimeClient> {
-  const url = await resolveConnectUrl();
+  const credentials = await resolveRealtimeCredentials();
   return await connectRealtimeClient({
-    url,
-    credentials: new CompositeCredentialsProvider(),
+    url: credentials.controlUrl,
+    credentials: { getToken: async () => credentials.token },
   });
 }
 
