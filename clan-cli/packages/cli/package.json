@@ -1,20 +1,40 @@
 {
   "name": "@clanofagents/cli",
-  "module": "src/main.tsx",
+  "version": "0.1.0",
+  "module": "src/cli.ts",
   "type": "module",
   "private": true,
+  "bin": {
+    "clancode": "./src/cli.ts"
+  },
+  "files": [
+    "src",
+    "package.json"
+  ],
   "scripts": {
     "dev": "bun run --watch src/main.tsx",
+    "start": "bun run src/cli.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "trueforge:smoke": "bun run scripts/trueforge-smoke.ts"
+    "test": "bun test src",
+    "trueforge:smoke": "bun run scripts/trueforge-smoke.ts",
+    "supervisor:smoke": "bun run scripts/supervisor-smoke.ts",
+    "turn:smoke": "bun run scripts/turn-smoke.ts",
+    "plan:mcp-smoke": "bun run scripts/plan-mcp-smoke.ts",
+    "approval:smoke": "bun run scripts/approval-smoke.ts",
+    "resume:smoke": "bun run scripts/resume-smoke.ts",
+    "build": "bun build src/cli.ts --outfile dist/cli.js --target bun",
+    "pack:local": "bun run scripts/pack-local.ts"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/react": "^19.2.18",
+    "typescript": "^5.9.2"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
+    "@clanofagents/protocol": "workspace:*",
     "@opentui/core": "^0.5.6",
     "@opentui/react": "^0.5.6",
     "@truefoundry/trueforge": "0.1.4",
