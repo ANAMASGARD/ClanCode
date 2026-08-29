@@ -18,6 +18,7 @@ describe("session mapping", () => {
         model: "openai/gpt-test",
       });
       await saveMapping({
+        id: "sess-local-1",
         key,
         repositoryIdentity: primaryIdentity,
         agentProfile: "build",

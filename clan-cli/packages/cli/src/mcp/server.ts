@@ -1,3 +1,4 @@
+import { toolDescription } from "../tools/descriptions.ts";
 import {
   BUILD_TOOLS,
   executeTool,
@@ -115,7 +116,7 @@ async function handleRpc(body: JsonRpc, context: ToolContext): Promise<unknown> 
       result: {
         tools: names.map((name) => ({
           name,
-          description: `Clan Code ${context.mode} tool: ${name}`,
+          description: toolDescription(name),
           inputSchema: jsonSchemaFor(name),
         })),
       },

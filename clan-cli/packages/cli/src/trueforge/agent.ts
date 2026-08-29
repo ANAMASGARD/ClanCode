@@ -22,7 +22,7 @@ export async function registerLoopbackMcp(
 ): Promise<void> {
   await client.settings.mcpServers.createOrUpdate({
     manifest: {
-      description: "Clan Code local repository tools",
+      description: "ClanCode local repository tools",
       name: "clancode-local",
       type: "remote",
       url,

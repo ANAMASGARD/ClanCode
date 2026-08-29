@@ -11,7 +11,7 @@ async function main(): Promise<void> {
     if (supervisor.status() !== "ready") {
       throw new Error(`expected ready, got ${supervisor.status()}`);
     }
-    console.log(`Clan Code supervisor smoke: ${supervisor.runtimeMode()} ${supervisor.status()}`);
+    console.log(`ClanCode supervisor smoke: ${supervisor.runtimeMode()} ${supervisor.status()}`);
     await supervisor.cancel();
     if (supervisor.status() !== "stopped") {
       throw new Error(`expected stopped, got ${supervisor.status()}`);

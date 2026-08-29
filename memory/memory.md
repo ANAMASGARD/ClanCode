@@ -1,14 +1,14 @@
-# Clan Code — Project Memory
+# ClanCode — Project Memory
 
-Last updated: 2026-08-28 (local TrueForge-supervised CLI harness)
+Last updated: 2026-08-29 (ClanCode CLI finalization)
 
 ## What This Repo Is
 
-Clan Code is a local-first AI coding harness:
+ClanCode is a local-first AI coding harness:
 
 - **Web app (`app/`)** — Next.js control plane: auth, repo selection, clan UI, tasks, approvals, run timeline.
 - **CLI (`clan-cli/`)** — Local execution plane: `clancode` wraps TrueForge via a run supervisor.
-- **TrueForge** — Runtime agent harness (sessions, turns, streaming, MCP). Clan Code does not replace it.
+- **TrueForge** — Runtime agent harness (sessions, turns, streaming, MCP). ClanCode does not replace it.
 - **Delivery** — Agent changes go through isolated branches → PR → Qodo review → human merge.
 
 Stable contracts live in `ARCHITECTURE.md` and `AGENTS.md` (initially committed on `main` as `4e6144e`).
@@ -27,12 +27,15 @@ Do not move filesystem/shell/Git execution into the Next.js app.
 
 ### Status
 
-Local `clancode` harness: run supervisor, repository boundary, Plan/Build tools
-over loopback MCP, isolated `clancode/*` worktrees, process runner, approvals,
-session mapping, OpenTUI chat, validation, Git/PR delivery, `doctor` / `run`.
-TrueForge adapter is preserved (attach/spawn, never kill attached). Model
-providers must still be configured in TrueForge (or `CLAN_TRUEFORGE_MODEL`) for
-live agent turns.
+Local `clancode` harness: run supervisor, repository boundary, polyglot search
+(rg-first + git ls-files Bun fallback), targeted apply_patch, Plan/Build MCP
+tools over loopback MCP, isolated `clancode/*` worktrees, process runner,
+approvals, multi-id session mapping with model preferences, OpenTUI chat,
+validation, Git/PR delivery, outbound Socket.IO client (`clancode connect`),
+npm-ready `@clancode/cli` packaging, `doctor` / `run`.
+TrueForge adapter is preserved (connect-level runtime manager; attach/spawn,
+never kill attached). Model providers must still be configured in TrueForge
+(or `CLAN_TRUEFORGE_MODEL`) for live agent turns.
 
 ### Layout
 
@@ -44,7 +47,7 @@ clan-cli/
 ├── README.md
 └── packages/
     ├── protocol/             # RunEvent v1 (eventId + sequence)
-    └── cli/                  # @clanofagents/cli → bin clancode
+    └── cli/                  # @clancode/cli → bin clancode
         ├── src/supervisor/
         ├── src/repository/
         ├── src/worktree/
@@ -52,6 +55,8 @@ clan-cli/
         ├── src/process/
         ├── src/mcp/
         ├── src/git/
+        ├── src/search/
+        ├── src/realtime/
         ├── src/session/
         ├── src/doctor/
         ├── src/cli/
@@ -66,7 +71,9 @@ clan-cli/
 4. **Plan/Build MCP tools** — loopback `127.0.0.1` Streamable HTTP JSON-RPC.
 5. **Worktrees** — `clancode/<slug>-<id>` outside the user checkout (XDG state).
 6. **Approvals** — TrueForge `tool.approval_required` → `user.tool_approval`.
-7. **Production CLI** — `clancode`, `clancode run`, `clancode doctor[--json]`.
+7. **Production CLI** — `clancode`, `clancode run`, `clancode doctor [--json]`, `clancode connect`.
+8. **Socket.IO client** — outbound `command`/`event` transport; persisted command-id journal; allowlisted run projection.
+9. **npm package** — `@clancode/cli@0.1.0-beta.1`, `dist/cli.js` bin with Bun shebang.
 
 ### How to Run (local dev)
 
@@ -81,9 +88,9 @@ Pack locally: `bun run --cwd packages/cli pack:local`
 
 ### Not Built Yet
 
-- Device pairing with web control plane / Socket.IO
+- Website Socket.IO server and device pairing UI
 - Website 3D game visualization
-- npm registry publish
+- npm registry publish (package is publication-ready; scope/license are human blockers)
 - Remote PR smoke without `gh` authentication
 
 ### Stack

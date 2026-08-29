@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { RunEvent } from "@clanofagents/protocol";
+import type { RunEvent } from "@clancode/protocol";
 import { RunSupervisor } from "../src/supervisor/supervisor.ts";
 
 const MARKER = `PLAN_MCP_${crypto.randomUUID()}`;

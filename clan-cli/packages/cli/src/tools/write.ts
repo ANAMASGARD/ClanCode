@@ -109,7 +109,8 @@ export async function applyPatch(
   userPath: string,
   search: string,
   replace: string,
-): Promise<ToolResult<{ path: string }>> {
+  replaceAll = false,
+): Promise<ToolResult<{ path: string; replacements?: number }>> {
   try {
     const resolved = await resolveWithinRepo(repo, userPath, { mustExist: true });
     const rel = relativeToRoot(repo.root, resolved);
@@ -120,9 +121,13 @@ export async function applyPatch(
     if (!current.includes(search)) {
       return fail("stale", "Patch search text was not found (stale content)");
     }
-    const next = current.replace(search, replace);
+    const occurrences = current.split(search).length - 1;
+    if (occurrences > 1 && !replaceAll) {
+      return fail("ambiguous", `Patch search text matched ${String(occurrences)} times`);
+    }
+    const next = replaceAll ? current.split(search).join(replace) : current.replace(search, replace);
     await Bun.write(resolved, next);
-    return ok({ path: rel });
+    return ok({ path: rel, replacements: occurrences });
   } catch (error) {
     return mapBoundary(error);
   }

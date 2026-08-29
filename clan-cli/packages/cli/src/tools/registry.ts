@@ -63,7 +63,10 @@ export function jsonSchemaFor(name: string): Record<string, unknown> {
     case "glob":
       return {
         type: "object",
-        properties: { pattern: { type: "string" } },
+        properties: {
+          pattern: { type: "string" },
+          path: { type: "string" },
+        },
         required: ["pattern"],
       };
     case "grep":
@@ -71,7 +74,12 @@ export function jsonSchemaFor(name: string): Record<string, unknown> {
         type: "object",
         properties: {
           pattern: { type: "string" },
+          path: { type: "string" },
+          include: { type: "string" },
           glob: { type: "string" },
+          caseSensitive: { type: "boolean" },
+          fixedString: { type: "boolean" },
+          maxMatches: { type: "number" },
         },
         required: ["pattern"],
       };
@@ -93,6 +101,7 @@ export function jsonSchemaFor(name: string): Record<string, unknown> {
           path: { type: "string" },
           search: { type: "string" },
           replace: { type: "string" },
+          replaceAll: { type: "boolean" },
         },
         required: ["path", "search", "replace"],
       };
@@ -129,6 +138,7 @@ export async function executeTool(
 ): Promise<ToolResult<unknown>> {
   const str = (key: string): string =>
     typeof args[key] === "string" ? args[key] : "";
+  const bool = (key: string): boolean => args[key] === true;
   const num = (key: string): number =>
     typeof args[key] === "number" ? args[key] : Number(args[key]);
 
@@ -156,9 +166,15 @@ export async function executeTool(
     case "read_file":
       return await readFileTool(context.repo, str("path"));
     case "glob":
-      return await globTool(context.repo, str("pattern"));
+      return await globTool(context.repo, str("pattern"), str("path") || undefined);
     case "grep":
-      return await grepTool(context.repo, str("pattern"), str("glob") || undefined);
+      return await grepTool(context.repo, str("pattern"), {
+        path: str("path") || undefined,
+        include: str("include") || str("glob") || undefined,
+        caseSensitive: bool("caseSensitive"),
+        fixedString: bool("fixedString"),
+        maxMatches: typeof args.maxMatches === "number" ? args.maxMatches : undefined,
+      });
     case "git_status":
       return await gitStatusTool(context.repo);
     case "git_diff":
@@ -184,7 +200,13 @@ export async function executeTool(
       return await afterMutation(
         context,
         name,
-        await applyPatch(context.repo, str("path"), str("search"), str("replace")),
+        await applyPatch(
+          context.repo,
+          str("path"),
+          str("search"),
+          str("replace"),
+          bool("replaceAll"),
+        ),
       );
     case "replace_range":
       return await afterMutation(

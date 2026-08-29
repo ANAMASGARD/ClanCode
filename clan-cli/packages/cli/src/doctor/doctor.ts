@@ -119,7 +119,7 @@ export async function runDoctor(repoPath?: string): Promise<DoctorReport> {
 }
 
 export function formatDoctor(report: DoctorReport): string {
-  const lines = ["Clan Code Doctor"];
+  const lines = ["ClanCode Doctor"];
   for (const item of report.checks) {
     lines.push(`${item.ok ? "✓" : "✗"} ${item.id}: ${item.detail}`);
   }

@@ -1,6 +1,6 @@
-# Clan Code CLI
+# ClanCode CLI
 
-Local execution-plane CLI. Clan Code **wraps TrueForge** — it does not replace
+Local execution-plane CLI. ClanCode **wraps TrueForge** — it does not replace
 or fork it. Users run `clancode`.
 
 ```bash
@@ -34,7 +34,7 @@ bun run --cwd packages/cli pack:local
 ## Architecture
 
 TrueForge owns the agent loop (sessions, turns, streaming, MCP, approvals).
-Clan Code owns supervision, repository authorization, worktrees, local tools,
+ClanCode owns supervision, repository authorization, worktrees, local tools,
 process execution, Git delivery, RunEvents, and the TUI.
 
 Plan mode is read-only. Build mode edits an isolated `clancode/*` worktree and
