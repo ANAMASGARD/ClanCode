@@ -16,7 +16,7 @@ Prefer GitHub native issue dependencies when available:
 
 ```bash
 gh api --method POST repos/ANAMASGARD/ClanCode/issues/<child>/dependencies/blocked_by \
-  -f issue_id=<blocker-database-id>
+  -F issue_id=<blocker-database-id>
 ```
 
 Blocker database id: `gh api repos/ANAMASGARD/ClanCode/issues/<n> --jq .id`
