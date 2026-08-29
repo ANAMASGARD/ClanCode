@@ -1,9 +1,11 @@
-import { mkdir, open, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 export type SessionMapping = {
   key: string;
+  /** Stable primary repository identity (never a transient worktree path). */
   repositoryIdentity: string;
   agentProfile: string;
   model: string;
@@ -14,11 +16,25 @@ export type SessionMapping = {
     toolName: string;
     summary: string;
     cwd?: string;
-    risk: "READ" | "WRITE" | "SHELL_SAFE" | "SHELL_UNKNOWN" | "DELETE" | "GIT_COMMIT" | "GIT_PUSH" | "CREATE_PR" | "SYSTEM_PRIVILEGED";
+    risk:
+      | "READ"
+      | "WRITE"
+      | "SHELL_SAFE"
+      | "SHELL_UNKNOWN"
+      | "DELETE"
+      | "GIT_COMMIT"
+      | "GIT_PUSH"
+      | "CREATE_PR"
+      | "SYSTEM_PRIVILEGED";
   }>;
+  worktreePath?: string;
+  branchName?: string;
+  baseCommit?: string;
   createdAt: string;
   updatedAt: string;
 };
+
+const LOCK_STALE_MS = 30_000;
 
 function storePath(): string {
   const base =
@@ -34,21 +50,49 @@ export function sessionKey(input: {
   return `${input.repositoryIdentity}::${input.agentProfile}::${input.model}`;
 }
 
+function isLockContention(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+  const record = error as { code?: string };
+  return record.code === "EEXIST";
+}
+
+async function removeStaleLock(lockPath: string): Promise<void> {
+  if (!existsSync(lockPath)) {
+    return;
+  }
+  try {
+    const info = await stat(lockPath);
+    if (Date.now() - info.mtimeMs > LOCK_STALE_MS) {
+      await unlink(lockPath).catch(() => undefined);
+    }
+  } catch {
+    // Best-effort stale recovery only.
+  }
+}
+
 async function withLock<T>(fn: () => Promise<T>): Promise<T> {
   const file = storePath();
   await mkdir(dirname(file), { recursive: true });
   const lockPath = `${file}.lock`;
   for (let attempt = 0; attempt < 40; attempt += 1) {
+    await removeStaleLock(lockPath);
+    let handle: Awaited<ReturnType<typeof open>> | undefined;
     try {
-      const handle = await open(lockPath, "wx");
-      try {
-        return await fn();
-      } finally {
-        await handle.close();
-        await unlink(lockPath).catch(() => undefined);
+      handle = await open(lockPath, "wx");
+    } catch (error) {
+      if (isLockContention(error)) {
+        await Bun.sleep(25);
+        continue;
       }
-    } catch {
-      await Bun.sleep(25);
+      throw error;
+    }
+    try {
+      return await fn();
+    } finally {
+      await handle.close();
+      await unlink(lockPath).catch(() => undefined);
     }
   }
   throw new Error("Timed out waiting for session store lock");
@@ -106,6 +150,32 @@ export async function resolveMapping(key: string): Promise<SessionMapping | unde
   return await withLock(async () => {
     const rows = await loadAll();
     return rows.find((row) => row.key === key);
+  });
+}
+
+export async function findResumeMapping(input: {
+  repositoryIdentity: string;
+  model?: string;
+}): Promise<SessionMapping | undefined> {
+  return await withLock(async () => {
+    const rows = await loadAll();
+    const candidates = rows.filter((row) => {
+      if (row.repositoryIdentity !== input.repositoryIdentity) {
+        return false;
+      }
+      if (input.model !== undefined && row.model !== input.model) {
+        return false;
+      }
+      return true;
+    });
+    if (candidates.length === 0) {
+      return undefined;
+    }
+    candidates.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+    const pending = candidates.find(
+      (row) => row.pendingApprovals !== undefined && row.pendingApprovals.length > 0,
+    );
+    return pending ?? candidates[0];
   });
 }
 

@@ -48,11 +48,14 @@ export async function runCli(argv: readonly string[]): Promise<number> {
         console.error(
           "Run paused for approval. Start interactive `clancode`, then /resume and /approve or /deny.",
         );
+        await supervisor.detachForApprovalPause();
         return 3;
       }
       return supervisor.status() === "failed" ? 1 : 0;
     } finally {
-      await supervisor.stop();
+      if (supervisor.status() !== "awaiting_approval" && supervisor.status() !== "stopped") {
+        await supervisor.stop();
+      }
     }
   }
 

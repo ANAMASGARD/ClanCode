@@ -19,6 +19,9 @@
     "trueforge:smoke": "bun run scripts/trueforge-smoke.ts",
     "supervisor:smoke": "bun run scripts/supervisor-smoke.ts",
     "turn:smoke": "bun run scripts/turn-smoke.ts",
+    "plan:mcp-smoke": "bun run scripts/plan-mcp-smoke.ts",
+    "approval:smoke": "bun run scripts/approval-smoke.ts",
+    "resume:smoke": "bun run scripts/resume-smoke.ts",
     "build": "bun build src/cli.ts --outfile dist/cli.js --target bun",
     "pack:local": "bun run scripts/pack-local.ts"
   },

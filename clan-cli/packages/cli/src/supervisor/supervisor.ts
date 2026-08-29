@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import {
   cancelSession,
   createAgentClient,
@@ -32,6 +33,7 @@ import { createTaskWorktree, type TaskWorktree } from "../worktree/manager.ts";
 import { createGitService, type GitService } from "../git/service.ts";
 import { classifyTool } from "../policy/risk.ts";
 import {
+  findResumeMapping,
   invalidateMapping,
   listSessions,
   resolveMapping,
@@ -40,6 +42,8 @@ import {
   type SessionMapping,
 } from "../session/store.ts";
 import { runCommand, sanitizeEnv } from "../process/runner.ts";
+import { completeSuccessfulTurn } from "./build-complete.ts";
+import { ToolCallTracker } from "./tool-call-tracker.ts";
 
 export type RunStatus =
   | "idle"
@@ -94,7 +98,9 @@ export class RunSupervisor {
   #git: GitService = createGitService();
   #deleteApproved = false;
   #commandApproved = false;
-  #toolCalls = new Map<string, KnownToolCall>();
+  #mutatedThisTurn = false;
+  #toolCallTracker = new ToolCallTracker();
+  #approvedToolCallIds = new Set<string>();
 
   constructor(config: TrueforgeConfig = loadTrueforgeConfig()) {
     this.#config = config;
@@ -138,6 +144,7 @@ export class RunSupervisor {
       deleteApproved: this.#deleteApproved,
       commandApproved: this.#commandApproved,
       onMutation: async () => {
+        this.#mutatedThisTurn = true;
         await this.emitDiff();
       },
     };
@@ -173,12 +180,23 @@ export class RunSupervisor {
     }
   }
 
-  async stop(): Promise<void> {
+  async stop(options?: { preserveSession?: boolean }): Promise<void> {
     if (this.#status === "stopped" || this.#status === "idle") {
       return;
     }
     this.#setStatus("stopping");
-    await this.#cleanup();
+    await this.#cleanup(options);
+    this.#setStatus("stopped");
+  }
+
+  /** Persist session state and stop runtime without discarding resume metadata. */
+  async detachForApprovalPause(): Promise<void> {
+    if (this.#status !== "awaiting_approval") {
+      return;
+    }
+    await this.#persistSession();
+    this.#setStatus("stopping");
+    await this.#cleanup({ preserveSession: true });
     this.#setStatus("stopped");
   }
 
@@ -201,18 +219,23 @@ export class RunSupervisor {
     this.#emit("run.cancelled", { sessionId });
   }
 
-  async #cleanup(): Promise<void> {
+  async #cleanup(options?: { preserveSession?: boolean }): Promise<void> {
     if (this.#cleaned) {
       return;
     }
     this.#cleaned = true;
-    this.sessionId = undefined;
-    this.pendingApprovals = [];
+    if (options?.preserveSession !== true) {
+      this.sessionId = undefined;
+      this.pendingApprovals = [];
+      this.worktree = undefined;
+    }
     this.#mcp?.close();
     this.#mcp = undefined;
     if (this.#handle !== undefined) {
       await stopRuntime(this.#handle);
+      this.#handle = undefined;
     }
+    this.#client = undefined;
   }
 
   async #ensureClient(): Promise<TrueforgeAgentClient> {
@@ -281,6 +304,11 @@ export class RunSupervisor {
     const client = await this.#ensureClient();
     const sessionId = await this.ensureSession();
     this.#setStatus("streaming");
+    this.#mutatedThisTurn = false;
+    this.#toolCallTracker.reset();
+    this.#approvedToolCallIds.clear();
+    this.#deleteApproved = false;
+    this.#commandApproved = false;
     this.#emit("turn.started", { sessionId });
     this.lastModelText = "";
     const stream = await streamTurn(client, sessionId, [
@@ -318,8 +346,7 @@ export class RunSupervisor {
         if (event.type === "turn.done") {
           const status = event.state.status;
           if (status === "done") {
-            this.#setStatus("ready");
-            this.#emit("run.completed", { turnId: this.turnId });
+            await this.#completeSuccessfulTurn();
           } else if (status === "cancelled") {
             this.#setStatus("stopped");
             this.#emit("run.cancelled", { turnId: this.turnId });
@@ -348,6 +375,9 @@ export class RunSupervisor {
         this.turnId = event.turnId;
         break;
       case "model.message.delta":
+        if (event.toolCalls !== undefined) {
+          this.#toolCallTracker.ingestDelta(event.toolCalls);
+        }
         if (typeof event.content === "string") {
           this.lastModelText += event.content;
           this.#emit("model.delta", { text: event.content, turnId: this.turnId });
@@ -356,16 +386,16 @@ export class RunSupervisor {
         break;
       case "model.message": {
         if (event.toolCalls !== undefined) {
+          this.#toolCallTracker.ingestMessage(event.toolCalls);
           for (const call of event.toolCalls) {
-            const name = call.function.name;
-            let parsed: Record<string, unknown> = {};
-            try {
-              parsed = JSON.parse(call.function.arguments) as Record<string, unknown>;
-            } catch {
-              parsed = {};
+            const known = this.#toolCallTracker.get(call.id);
+            if (known !== undefined) {
+              this.#emit("tool.requested", {
+                toolCallId: call.id,
+                name: known.name,
+                arguments: known.arguments,
+              });
             }
-            this.#toolCalls.set(call.id, { name, arguments: parsed });
-            this.#emit("tool.requested", { toolCallId: call.id, name, arguments: parsed });
           }
         }
         this.#emit("model.completed", { turnId: this.turnId });
@@ -373,7 +403,7 @@ export class RunSupervisor {
       }
       case "tool.approval_required":
         this.pendingApprovals = event.toolCalls.map((call) => {
-          const known = this.#toolCalls.get(call.id);
+          const known = this.#toolCallTracker.get(call.id);
           const toolName = known?.name ?? "tool";
           return {
             threadId: event.threadId,
@@ -392,6 +422,7 @@ export class RunSupervisor {
         });
         break;
       case "tool.response":
+        this.#clearApprovalFlags(event.toolCallId);
         this.#emit("tool.completed", {
           toolCallId: event.toolCallId,
           content: event.content,
@@ -419,7 +450,7 @@ export class RunSupervisor {
       return;
     }
     for (const call of event.toolCalls) {
-      const known = this.#toolCalls.get(call.id);
+      const known = this.#toolCallTracker.get(call.id);
       const name = known?.name ?? "repo_info";
       const args = known?.arguments ?? {};
       this.#emit("tool.started", { toolCallId: call.id, name, arguments: args });
@@ -466,8 +497,10 @@ export class RunSupervisor {
       await this.#consumeStream(stream);
       return;
     }
-    this.#deleteApproved = pending.toolName === "delete_file" || pending.toolName.includes("delete");
+    this.#deleteApproved =
+      pending.toolName === "delete_file" || pending.toolName.includes("delete");
     this.#commandApproved = pending.toolName === "run_command";
+    this.#approvedToolCallIds.add(pending.toolCallId);
     this.#emit("approval.granted", pending);
     const stream = await streamTurn(client, this.sessionId, [
       {
@@ -481,7 +514,40 @@ export class RunSupervisor {
     await this.#consumeStream(stream);
   }
 
+  #clearApprovalFlags(toolCallId: string): void {
+    if (!this.#approvedToolCallIds.has(toolCallId)) {
+      return;
+    }
+    this.#approvedToolCallIds.delete(toolCallId);
+    this.#deleteApproved = false;
+    this.#commandApproved = false;
+  }
+
+  async #completeSuccessfulTurn(): Promise<void> {
+    await completeSuccessfulTurn({
+      mode: this.mode,
+      mutatedThisTurn: this.#mutatedThisTurn,
+      turnId: this.turnId,
+      emitDiff: async () => {
+        await this.emitDiff();
+      },
+      runValidation: async () => this.runValidation(),
+      emit: (type, payload) => {
+        this.#emit(type, payload);
+      },
+      setReady: () => {
+        this.#setStatus("ready");
+      },
+    });
+  }
+
   async setMode(mode: AgentMode): Promise<void> {
+    if (mode === this.mode && (mode === "plan" || this.worktree !== undefined)) {
+      if (mode === "plan" && this.primaryRepo !== undefined) {
+        this.repo = this.primaryRepo;
+      }
+      return;
+    }
     this.mode = mode;
     this.sessionId = undefined;
     if (mode === "build" && this.primaryRepo !== undefined && this.worktree === undefined) {
@@ -597,52 +663,96 @@ export class RunSupervisor {
   }
 
   async resumeStoredSession(): Promise<void> {
-    if (this.repo === undefined) {
-      throw new Error("Cannot resume without repository");
+    if (this.primaryRepo === undefined) {
+      throw new Error("Cannot resume without primary repository");
     }
-    const model = this.modelName ?? (await this.#selectModel(await this.#ensureClient()));
+    const client = await this.#ensureClient();
+    const model = this.modelName ?? (await this.#selectModel(client));
     this.modelName = model;
-    const key = sessionKey({
-      repositoryIdentity: this.repo.identity,
-      agentProfile: this.mode,
-      model,
-    });
-    const mapping = await resolveMapping(key);
+    const mapping =
+      (await findResumeMapping({
+        repositoryIdentity: this.primaryRepo.identity,
+        model,
+      })) ??
+      (await resolveMapping(
+        sessionKey({
+          repositoryIdentity: this.primaryRepo.identity,
+          agentProfile: this.mode,
+          model,
+        }),
+      ));
     if (mapping === undefined) {
       throw new Error("No stored session for this repository/profile/model");
     }
-    const client = await this.#ensureClient();
     try {
       await getSession(client, mapping.trueforgeSessionId);
     } catch {
-      await invalidateMapping(key);
+      await invalidateMapping(mapping.key);
       throw new Error("Stored session is stale and was invalidated");
     }
+    this.mode = mapping.agentProfile === "build" ? "build" : "plan";
+    if (this.mode === "build") {
+      if (
+        mapping.worktreePath === undefined ||
+        mapping.branchName === undefined ||
+        mapping.baseCommit === undefined
+      ) {
+        throw new Error("Stored Build session is missing worktree metadata");
+      }
+      if (!existsSync(mapping.worktreePath)) {
+        await invalidateMapping(mapping.key);
+        throw new Error("Stored worktree no longer exists and was invalidated");
+      }
+      this.worktree = {
+        worktreePath: mapping.worktreePath,
+        branchName: mapping.branchName,
+        baseCommit: mapping.baseCommit,
+      };
+      this.repo = await resolveRepository(mapping.worktreePath);
+    } else {
+      this.repo = this.primaryRepo;
+      this.worktree = undefined;
+    }
+    if (this.#mcp === undefined) {
+      this.#mcp = startLoopbackMcp(() => this.#toolContext());
+    }
+    await this.#ensureMcpRegistered(client);
     this.sessionId = mapping.trueforgeSessionId;
     if (mapping.pendingApprovals !== undefined && mapping.pendingApprovals.length > 0) {
       this.pendingApprovals = mapping.pendingApprovals;
       this.#setStatus("awaiting_approval");
+    } else {
+      this.#setStatus("ready");
     }
   }
 
   async #persistSession(): Promise<void> {
-    if (this.repo === undefined || this.sessionId === undefined || this.modelName === undefined) {
+    if (
+      this.primaryRepo === undefined ||
+      this.sessionId === undefined ||
+      this.modelName === undefined
+    ) {
       return;
     }
+    const now = new Date().toISOString();
     const key = sessionKey({
-      repositoryIdentity: this.repo.identity,
+      repositoryIdentity: this.primaryRepo.identity,
       agentProfile: this.mode,
       model: this.modelName,
     });
+    const existing = await resolveMapping(key);
     await saveMapping({
       key,
-      repositoryIdentity: this.repo.identity,
+      repositoryIdentity: this.primaryRepo.identity,
       agentProfile: this.mode,
       model: this.modelName,
       trueforgeSessionId: this.sessionId,
       pendingApprovals: this.pendingApprovals,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      worktreePath: this.worktree?.worktreePath,
+      branchName: this.worktree?.branchName,
+      baseCommit: this.worktree?.baseCommit,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
     });
   }
 

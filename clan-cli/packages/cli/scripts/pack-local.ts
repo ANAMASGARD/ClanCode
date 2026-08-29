@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -103,6 +103,39 @@ async function main(): Promise<void> {
       throw new Error(`clancode ${args.join(" ")} failed`);
     }
   }
+
+  const repoDir = await mkdtemp(join(tmpdir(), "clancode-packed-run-"));
+  await mkdir(repoDir, { recursive: true });
+  Bun.spawnSync(["git", "init"], { cwd: repoDir });
+  Bun.spawnSync(["git", "config", "user.email", "pack@example.com"], { cwd: repoDir });
+  Bun.spawnSync(["git", "config", "user.name", "Pack"], { cwd: repoDir });
+  await writeFile(join(repoDir, "README.md"), "packed run repo\n");
+  Bun.spawnSync(["git", "add", "."], { cwd: repoDir });
+  Bun.spawnSync(["git", "commit", "-m", "init"], { cwd: repoDir });
+
+  const run = Bun.spawnSync(
+    ["bun", bin, "run", "Reply with exactly CLAN_CODE_READY"],
+    {
+      cwd: repoDir,
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env },
+    },
+  );
+  const runOut = run.stdout.toString() + run.stderr.toString();
+  console.log(`clancode run -> ${String(run.exitCode)}`);
+  if (/No TrueForge model|model provider|CLAN_TRUEFORGE_MODEL/i.test(runOut)) {
+    console.error("BLOCKED: packed clancode run requires a configured TrueForge model provider");
+    process.exitCode = 2;
+    return;
+  }
+  if (run.exitCode !== 0) {
+    throw new Error(`packed clancode run failed: ${runOut}`);
+  }
+  if (!runOut.includes("CLAN_CODE_READY")) {
+    throw new Error("packed clancode run did not stream CLAN_CODE_READY");
+  }
+  console.log("packed clancode run smoke: CLAN_CODE_READY");
 }
 
 await main();

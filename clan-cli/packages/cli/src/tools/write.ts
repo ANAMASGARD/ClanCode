@@ -1,5 +1,5 @@
 import { mkdir, unlink } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import {
   type RepositoryContext,
   resolveWithinRepo,
@@ -11,6 +11,8 @@ import { runCommand, sanitizeEnv } from "../process/runner.ts";
 function relativeToRoot(root: string, absolute: string): string {
   return absolute === root ? "." : absolute.slice(root.length + 1);
 }
+
+const NULL_PATH = process.platform === "win32" ? "NUL" : "/dev/null";
 
 export async function createFile(
   repo: RepositoryContext,
@@ -149,9 +151,45 @@ export async function deleteFile(
   }
 }
 
+async function untrackedPatch(repo: RepositoryContext, relativePath: string): Promise<string> {
+  const absolute = join(repo.root, relativePath);
+  const file = Bun.file(absolute);
+  if (!(await file.exists())) {
+    return "";
+  }
+  if (file.size > TOOL_LIMITS.maxFileBytes) {
+    return `--- ${NULL_PATH}\n+++ b/${relativePath}\n(truncated: file exceeds review limit)\n`;
+  }
+  const bytes = Buffer.from(await file.arrayBuffer());
+  if (bytes.includes(0)) {
+    return `--- ${NULL_PATH}\n+++ b/${relativePath}\n(binary file not shown)\n`;
+  }
+  const result = await runCommand({
+    command: "git",
+    args: ["diff", "--no-index", NULL_PATH, relativePath],
+    cwd: repo.root,
+    timeoutMs: 15_000,
+    maxStdoutBytes: TOOL_LIMITS.maxOutputBytes,
+    maxStderrBytes: 4_096,
+    env: sanitizeEnv(undefined),
+    authorizedRoot: repo.root,
+  });
+  if (result.stdout.length > 0) {
+    return result.stdout;
+  }
+  const content = bytes.toString("utf8");
+  const lines = content.split("\n");
+  const header = [`--- ${NULL_PATH}`, `+++ b/${relativePath}`];
+  const body = lines.map((line, index) => {
+    const marker = index === lines.length - 1 && line === "" ? "" : `+${line}`;
+    return marker;
+  });
+  return `${header.join("\n")}\n${body.join("\n")}\n`;
+}
+
 export async function diffMetadata(
   repo: RepositoryContext,
-): Promise<{ stat: string; diff: string }> {
+): Promise<{ stat: string; diff: string; paths: string[] }> {
   const names = await runCommand({
     command: "git",
     args: ["diff", "--name-only", "HEAD"],
@@ -195,13 +233,14 @@ export async function diffMetadata(
     });
     diff += trackedDiff.stdout;
   }
-  if (extra.length > 0) {
-    diff += `\nuntracked:\n${extra.join("\n")}\n`;
+  for (const rel of extra) {
+    diff += await untrackedPatch(repo, rel);
   }
   const statLines = [...tracked, ...extra];
   return {
     stat: statLines.length > 0 ? `${String(statLines.length)} paths` : "",
     diff,
+    paths: statLines,
   };
 }
 
