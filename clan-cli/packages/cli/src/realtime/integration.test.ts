@@ -315,6 +315,92 @@ describe("ConnectSession realtime integration", () => {
     await session.stop(client);
   });
 
+  test("task.cancel rejects missing runId", async () => {
+    const supervisor = new FakeSupervisor();
+    const { session, client } = await startSession({ supervisor });
+    const start = command({
+      type: "task.start",
+      payload: { repositoryPath: "/tmp/repo", prompt: "run" },
+    });
+    deviceSocket?.emit("command", start);
+    await Bun.sleep(50);
+
+    const cancel = command({
+      type: "task.cancel",
+      payload: {},
+    });
+    deviceSocket?.emit("command", cancel);
+    await Bun.sleep(50);
+
+    const ack = clientEvents.find(
+      (item) =>
+        (item as { type?: string }).type === "command.ack" &&
+        (item as { payload?: { commandId?: string } }).payload?.commandId === cancel.commandId,
+    ) as { payload?: { status?: string; reason?: string } } | undefined;
+    expect(ack?.payload?.status).toBe("rejected");
+    expect(ack?.payload?.reason).toBe("invalid");
+    expect(supervisor.status()).toBe("streaming");
+    await session.stop(client);
+  });
+
+  test("task.start failure before accept sends rejected failed ACK", async () => {
+    class FailingSupervisor extends FakeSupervisor {
+      override async start(_repositoryPath: string): Promise<void> {
+        throw new Error("startup failed");
+      }
+    }
+    const { session, client } = await startSession({ supervisor: new FailingSupervisor() });
+    const start = command({
+      type: "task.start",
+      commandId: "cmd-start-fail",
+      payload: { repositoryPath: "/tmp/repo", prompt: "boom" },
+    });
+    deviceSocket?.emit("command", start);
+    await Bun.sleep(50);
+
+    const ack = clientEvents.find(
+      (item) =>
+        (item as { type?: string }).type === "command.ack" &&
+        (item as { payload?: { commandId?: string } }).payload?.commandId === "cmd-start-fail",
+    ) as { payload?: { status?: string; reason?: string } } | undefined;
+    expect(ack?.payload?.status).toBe("rejected");
+    expect(ack?.payload?.reason).toBe("failed");
+    await session.stop(client);
+  });
+
+  test("task.start failure after accept emits run.failed not contradictory ACK", async () => {
+    class LateFailSupervisor extends FakeSupervisor {
+      override async submitMessage(_prompt: string): Promise<void> {
+        throw new Error("submit failed");
+      }
+    }
+    const supervisor = new LateFailSupervisor();
+    const { session, client } = await startSession({ supervisor });
+    const start = command({
+      type: "task.start",
+      commandId: "cmd-submit-fail",
+      payload: { repositoryPath: "/tmp/repo", prompt: "late boom" },
+    });
+    deviceSocket?.emit("command", start);
+    await Bun.sleep(100);
+
+    const acks = clientEvents.filter(
+      (item) =>
+        (item as { type?: string }).type === "command.ack" &&
+        (item as { payload?: { commandId?: string } }).payload?.commandId === "cmd-submit-fail",
+    ) as Array<{ payload?: { status?: string } }>;
+    expect(acks.some((item) => item.payload?.status === "accepted")).toBe(true);
+    expect(acks.some((item) => item.payload?.status === "rejected")).toBe(false);
+
+    const failed = clientEvents.find(
+      (item) =>
+        (item as { type?: string }).type === "run.event" &&
+        (item as { payload?: { event?: { type?: string } } }).payload?.event?.type === "run.failed",
+    );
+    expect(failed).toBeDefined();
+    await session.stop(client);
+  });
+
   test("approval.resolve matches runId and toolCallId", async () => {
     const supervisor = new FakeSupervisor();
     const { session, client } = await startSession({ supervisor });

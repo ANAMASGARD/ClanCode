@@ -1,14 +1,15 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { spawnSyncBounded } from "../src/process/spawn-sync.ts";
 
 const cliRoot = join(import.meta.dir, "..");
 const distDir = join(cliRoot, "dist");
 
 async function main(): Promise<void> {
-  const build = Bun.spawnSync(
+  const build = spawnSyncBounded(
+    "bun",
     [
-      "bun",
       "build",
       "src/cli.ts",
       "--outfile",
@@ -30,21 +31,21 @@ async function main(): Promise<void> {
     ],
     {
       cwd: cliRoot,
-      stdout: "pipe",
-      stderr: "pipe",
+      timeoutMs: 120_000,
+      maxOutputBytes: 4_194_304,
     },
   );
   if (build.exitCode !== 0) {
-    throw new Error(build.stderr.toString() || "bun build failed");
+    throw new Error(build.stderr || "bun build failed");
   }
 
-  const normalize = Bun.spawnSync(["bun", "run", "scripts/normalize-dist.ts"], {
+  const normalize = spawnSyncBounded("bun", ["run", "scripts/normalize-dist.ts"], {
     cwd: cliRoot,
-    stdout: "pipe",
-    stderr: "pipe",
+    timeoutMs: 30_000,
+    maxOutputBytes: 1_048_576,
   });
   if (normalize.exitCode !== 0) {
-    throw new Error(normalize.stderr.toString() || "normalize-dist failed");
+    throw new Error(normalize.stderr || "normalize-dist failed");
   }
 
   const distPath = join(distDir, "cli.js");
@@ -53,21 +54,20 @@ async function main(): Promise<void> {
     throw new Error("dist/cli.js must begin with #!/usr/bin/env bun");
   }
 
-  const packed = Bun.spawnSync(["npm", "pack", "--ignore-scripts", "--json"], {
+  const packed = spawnSyncBounded("npm", ["pack", "--ignore-scripts", "--json"], {
     cwd: cliRoot,
-    stdout: "pipe",
-    stderr: "pipe",
+    timeoutMs: 120_000,
+    maxOutputBytes: 4_194_304,
   });
   if (packed.exitCode !== 0) {
-    throw new Error(packed.stderr.toString() || "npm pack failed");
+    throw new Error(packed.stderr || "npm pack failed");
   }
 
-  const stdout = packed.stdout.toString();
-  const jsonStart = stdout.indexOf("[");
+  const jsonStart = packed.stdout.indexOf("[");
   if (jsonStart < 0) {
-    throw new Error(`npm pack did not emit JSON: ${stdout}`);
+    throw new Error(`npm pack did not emit JSON: ${packed.stdout}`);
   }
-  const parsed = JSON.parse(stdout.slice(jsonStart)) as Array<{ filename?: string }>;
+  const parsed = JSON.parse(packed.stdout.slice(jsonStart)) as Array<{ filename?: string }>;
   const tarballName = parsed[0]?.filename;
   if (tarballName === undefined) {
     throw new Error("npm pack did not return tarball name");
@@ -75,32 +75,40 @@ async function main(): Promise<void> {
   const tarball = join(cliRoot, tarballName);
   console.log(`packed ${tarball}`);
 
-  const manifestText = await Bun.spawnSync(["tar", "-xOf", tarball, "package/package.json"], {
-    stdout: "pipe",
-  }).stdout.toString();
-  if (manifestText.includes("workspace:*")) {
+  const manifest = spawnSyncBounded("tar", ["-xOf", tarball, "package/package.json"], {
+    timeoutMs: 30_000,
+    maxOutputBytes: 1_048_576,
+  });
+  if (manifest.exitCode !== 0) {
+    throw new Error(manifest.stderr || "tar extract failed");
+  }
+  if (manifest.stdout.includes("workspace:*")) {
     throw new Error("packed manifest contains workspace:* dependency");
   }
 
   const installPrefix = await mkdtemp(join(tmpdir(), "clancode-npm-prefix-"));
-  const npmInstall = Bun.spawnSync(
-    ["npm", "install", "-g", tarball, "--prefix", installPrefix, "--ignore-scripts"],
-    { stdout: "inherit", stderr: "inherit" },
+  const npmInstall = spawnSyncBounded(
+    "npm",
+    ["install", "-g", tarball, "--prefix", installPrefix, "--ignore-scripts"],
+    {
+      timeoutMs: 300_000,
+      maxOutputBytes: 8_388_608,
+    },
   );
   if (npmInstall.exitCode !== 0) {
-    throw new Error("npm install -g failed");
+    throw new Error(npmInstall.stderr || "npm install -g failed");
   }
 
   const bin = join(installPrefix, "bin", "clancode");
   for (const args of [["--version"], ["--help"], ["doctor", "--json"]]) {
-    const result = Bun.spawnSync([bin, ...args], {
+    const result = spawnSyncBounded(bin, args, {
       cwd: installPrefix,
-      stdout: "pipe",
-      stderr: "pipe",
+      timeoutMs: 60_000,
+      maxOutputBytes: 2_097_152,
       env: { ...process.env, PATH: `${join(installPrefix, "bin")}:${process.env.PATH ?? ""}` },
     });
     console.log(`clancode ${args.join(" ")} -> ${String(result.exitCode)}`);
-    const combined = result.stdout.toString() + result.stderr.toString();
+    const combined = result.stdout + result.stderr;
     if (/sk-|BEGIN OPENSSH|GITHUB_TOKEN=/.test(combined)) {
       throw new Error("installed clancode leaked a secret");
     }

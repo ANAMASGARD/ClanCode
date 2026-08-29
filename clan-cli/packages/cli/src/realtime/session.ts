@@ -1,7 +1,8 @@
-import type { RunEvent } from "@clancode/protocol";
 import {
+  createRunEvent,
   parseCommandEnvelope,
   projectRunEventForNetwork,
+  type RunEvent,
   type ClientEventEnvelope,
   type CommandAckPayload,
   type CommandEnvelope,
@@ -77,14 +78,7 @@ export class ConnectSession {
       this.#sendHeartbeat(client);
     }, 20_000);
     client.onCommand((payload) => {
-      this.#commandChain = this.#commandChain
-        .then(() => this.#handleCommand(client, payload))
-        .catch((error) => {
-          console.error(
-            "connect command handler failed:",
-            error instanceof Error ? error.message : String(error),
-          );
-        });
+      this.#commandChain = this.#commandChain.then(() => this.#handleCommand(client, payload));
     });
   }
 
@@ -156,6 +150,64 @@ export class ConnectSession {
     }
   }
 
+  async #rejectBeforeAccept(
+    client: RealtimeClient,
+    command: CommandEnvelope,
+    error: unknown,
+  ): Promise<void> {
+    console.error(
+      "connect command failed before accept:",
+      error instanceof Error ? error.message : String(error),
+    );
+    await this.#journal.record({
+      commandId: command.commandId,
+      receivedAt: new Date().toISOString(),
+      expiresAt: command.expiresAt,
+      status: "rejected",
+      reason: "failed",
+    });
+    this.#ack(client, command.commandId, "rejected", undefined, "failed");
+    await this.#disposeSupervisor();
+    this.#sendHello(client, "idle");
+  }
+
+  async #handlePostAcceptFailure(
+    client: RealtimeClient,
+    command: CommandEnvelope,
+    error: unknown,
+  ): Promise<void> {
+    const runId = this.#supervisor?.runId;
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("connect task failed after accept:", message);
+    if (runId !== undefined) {
+      this.#emitRunEvent(
+        client,
+        createRunEvent({
+          runId,
+          sequence: 0,
+          type: "run.failed",
+          payload: { message, code: "execution_failed" },
+        }),
+      );
+    }
+    await this.#disposeSupervisor();
+    this.#sendHello(client, "idle");
+  }
+
+  async #disposeSupervisor(): Promise<void> {
+    this.#unsubscribe?.();
+    this.#unsubscribe = undefined;
+    if (this.#supervisor === undefined) {
+      return;
+    }
+    try {
+      await this.#supervisor.stop();
+    } catch {
+      // Best-effort cleanup after failures.
+    }
+    this.#supervisor = undefined;
+  }
+
   async #taskStart(client: RealtimeClient, command: CommandEnvelope): Promise<void> {
     if (
       this.#supervisor !== undefined &&
@@ -184,30 +236,38 @@ export class ConnectSession {
       return;
     }
     if (this.#supervisor !== undefined) {
-      await this.#supervisor.stop();
-      this.#unsubscribe?.();
-      this.#supervisor = undefined;
+      await this.#disposeSupervisor();
     }
-    const handle = await this.#runtimeManager.ensure();
-    this.#supervisor = this.#createSupervisor(loadTrueforgeConfig(), {
-      runtimeLease: leaseRuntime(handle),
-    });
-    this.#wireEvents(client);
-    await this.#supervisor.start(payload.repositoryPath);
-    if (payload.mode === "build") {
-      await this.#supervisor.setMode("build");
+    let accepted = false;
+    try {
+      const handle = await this.#runtimeManager.ensure();
+      this.#supervisor = this.#createSupervisor(loadTrueforgeConfig(), {
+        runtimeLease: leaseRuntime(handle),
+      });
+      this.#wireEvents(client);
+      await this.#supervisor.start(payload.repositoryPath);
+      if (payload.mode === "build") {
+        await this.#supervisor.setMode("build");
+      }
+      await this.#journal.record({
+        commandId: command.commandId,
+        receivedAt: new Date().toISOString(),
+        expiresAt: command.expiresAt,
+        status: "accepted",
+        runId: this.#supervisor.runId,
+      });
+      this.#ack(client, command.commandId, "accepted", this.#supervisor.runId);
+      accepted = true;
+      this.#sendHello(client, "busy");
+      await this.#supervisor.submitMessage(payload.prompt);
+      this.#sendHello(client, this.#connectStatus());
+    } catch (error) {
+      if (accepted) {
+        await this.#handlePostAcceptFailure(client, command, error);
+      } else {
+        await this.#rejectBeforeAccept(client, command, error);
+      }
     }
-    await this.#journal.record({
-      commandId: command.commandId,
-      receivedAt: new Date().toISOString(),
-      expiresAt: command.expiresAt,
-      status: "accepted",
-      runId: this.#supervisor.runId,
-    });
-    this.#ack(client, command.commandId, "accepted", this.#supervisor.runId);
-    this.#sendHello(client, "busy");
-    await this.#supervisor.submitMessage(payload.prompt);
-    this.#sendHello(client, this.#connectStatus());
   }
 
   async #taskCancel(client: RealtimeClient, command: CommandEnvelope): Promise<void> {
@@ -216,7 +276,11 @@ export class ConnectSession {
       this.#ack(client, command.commandId, "rejected", undefined, "no_active_run");
       return;
     }
-    if (payload.runId !== undefined && payload.runId !== this.#supervisor.runId) {
+    if (typeof payload.runId !== "string" || payload.runId.length === 0) {
+      this.#ack(client, command.commandId, "rejected", undefined, "invalid");
+      return;
+    }
+    if (payload.runId !== this.#supervisor.runId) {
       this.#ack(client, command.commandId, "rejected", undefined, "run_mismatch");
       return;
     }

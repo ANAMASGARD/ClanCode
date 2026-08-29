@@ -35,6 +35,35 @@ describe("projectRunEventForNetwork", () => {
     expect(JSON.stringify(projected.payload)).not.toContain("SECRET_FILE_BODY");
   });
 
+  test("projects approval.required approvals array", () => {
+    const event = createRunEvent({
+      runId: "run-1",
+      sequence: 4,
+      type: "approval.required",
+      payload: {
+        approvals: [
+          {
+            toolCallId: "call-1",
+            toolName: "delete_file",
+            risk: "DELETE",
+            summary: '{"path":"tmp.txt"}',
+            cwd: "/home/user/secret/worktree",
+            threadId: "thread-1",
+          },
+        ],
+      },
+    });
+    const projected = projectRunEventForNetwork(event);
+    const payload = projected.payload as {
+      approvals?: Array<{ toolCallId?: string; toolName?: string; risk?: string; summary?: string }>;
+    };
+    expect(payload.approvals?.length).toBe(1);
+    expect(payload.approvals?.[0]?.toolName).toBe("delete_file");
+    expect(payload.approvals?.[0]?.toolCallId).toBe("call-1");
+    expect(JSON.stringify(projected.payload)).not.toContain("/home/user");
+    expect(JSON.stringify(projected.payload)).not.toContain("threadId");
+  });
+
   test("unknown event types do not pass payload through", () => {
     const event = createRunEvent({
       runId: "run-1",

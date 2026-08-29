@@ -58,7 +58,8 @@ export type CommandAckPayload = {
     | "invalid"
     | "run_mismatch"
     | "no_pending_approval"
-    | "no_active_run";
+    | "no_active_run"
+    | "failed";
   runId?: string;
 };
 
@@ -241,16 +242,23 @@ export function projectRunEventForNetwork(event: RunEvent): RunEvent {
           skipped: payload.skipped,
         },
       };
-    case "approval.required":
+    case "approval.required": {
+      const rawApprovals = Array.isArray(payload.approvals) ? payload.approvals : [];
       return {
         ...event,
         payload: {
-          toolName: payload.toolName,
-          risk: payload.risk,
-          summary: safeString(payload.summary, 300),
-          toolCallId: payload.toolCallId,
+          approvals: rawApprovals.map((item) => {
+            const row = isRecord(item) ? item : {};
+            return {
+              toolCallId: safeString(row.toolCallId),
+              toolName: safeString(row.toolName),
+              risk: row.risk,
+              summary: safeString(row.summary, 300),
+            };
+          }),
         },
       };
+    }
     case "approval.granted":
     case "approval.denied":
       return {

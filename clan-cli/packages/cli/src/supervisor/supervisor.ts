@@ -699,6 +699,9 @@ export class RunSupervisor {
     if (mapping === undefined) {
       throw new Error("No stored session for this repository/profile/model");
     }
+    if (localId !== undefined && mapping.repositoryIdentity !== this.primaryRepo.identity) {
+      throw new Error("Session id belongs to a different repository");
+    }
     this.#mappingId = mapping.id;
     try {
       await getSession(client, mapping.trueforgeSessionId);

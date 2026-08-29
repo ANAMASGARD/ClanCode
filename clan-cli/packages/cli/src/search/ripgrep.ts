@@ -1,5 +1,6 @@
 import type { RepositoryContext } from "../repository/repository.ts";
 import { resolveWithinRepo } from "../repository/repository.ts";
+import { spawnSyncBounded } from "../process/spawn-sync.ts";
 import { runCommand, sanitizeEnv } from "../process/runner.ts";
 import { TOOL_LIMITS } from "../tools/types.ts";
 import { shouldSkipRelativePath } from "./ignore.ts";
@@ -11,7 +12,10 @@ export async function isRipgrepAvailable(): Promise<boolean> {
   if (rgAvailable !== undefined) {
     return rgAvailable;
   }
-  const probe = Bun.spawnSync(["rg", "--version"], { stdout: "pipe", stderr: "pipe" });
+  const probe = spawnSyncBounded("rg", ["--version"], {
+    timeoutMs: 5_000,
+    maxOutputBytes: 8_192,
+  });
   rgAvailable = probe.exitCode === 0;
   return rgAvailable;
 }
