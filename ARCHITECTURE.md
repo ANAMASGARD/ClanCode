@@ -243,8 +243,8 @@ flowchart TB
 
 `OpenTUI` is the CLI presentation stack, analogous to the web application's
 Next.js presentation stack. Replacing the TUI library must not move execution,
-policy, or repository access into UI components. The current scaffold implements
-only the presentation/bootstrap portion; the execution layers remain planned.
+policy, or repository access into UI components. The volatile implementation
+baseline for these layers is maintained in [`memory/memory.md`](memory/memory.md).
 
 ## 7. TrueForge Runtime Boundary
 
@@ -589,14 +589,13 @@ dependencies.
 
 Kenney models are served from `public/assets/` and loaded through the typed
 [`app/lib/visualization/kenney.ts`](app/lib/visualization/kenney.ts) URL
-boundary. The current packs contain OBJ/MTL assets and, for some packs, FBX
-assets; they do not provide a GLB/GLTF runtime catalog. `Overview.html` files
-and `Previews/` images are human reference material, not scene model sources.
-The full inventory is maintained in
+boundary. Runtime scene models use the verified GLB/GLTF-format directories;
+`Overview.html`, `Previews/`, OBJ, and FBX files are reference or interchange
+material rather than scene sources. The current inventory is maintained in
 [`memory/visualization-assets.md`](memory/visualization-assets.md).
 
-Clash Display files under `public/fonts/` are reserved for web HUD and branding
-typography. Theme music and click/select feedback under `public/audio/` are
+Font files under `public/fonts/` may be used only after their redistribution and
+deployment license has been verified. Theme music and click/select feedback under `public/audio/` are
 reserved for the web HUD and are managed through
 [`app/lib/visualization/audio.ts`](app/lib/visualization/audio.ts). The theme
 may loop only when browser playback policy permits it, and users must have an
@@ -740,14 +739,6 @@ This document defines stable system, trust, and execution boundaries; it is not 
 feature-by-feature implementation ledger. The current implementation baseline
 and other volatile project status belong in
 [`memory/memory.md`](memory/memory.md).
-
-At the current baseline, `clan-cli` contains an OpenTUI/React presentation
-scaffold and thin command-routing placeholder. The web app has a catalog for
-the Kenney/font/audio assets, typed visualization URL/audio boundaries, and the
-root 3D dependency stack, but no village scene or HUD wiring yet. Device
-pairing, repository validation, policy enforcement, TrueForge integration, safe
-execution tools, structured transport, worktree isolation, and GitHub delivery
-are not yet implemented.
 
 Update `ARCHITECTURE.md` only when a fundamental boundary or execution model
 changes. Update `memory/memory.md` when implementation milestones change.

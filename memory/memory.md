@@ -1,6 +1,6 @@
 # ClanCode — Project Memory
 
-**Last updated:** 2026-08-29 (PR #19 Qodo review fixes)
+**Last updated:** 2026-08-29 (3D clan game foundation + hover-label fix)
 
 ## What This Repo Is
 
@@ -29,9 +29,9 @@ Local AI harness is feature-complete for hackathon scope. **Stop adding general 
 
 ---
 
-## Active milestone: Web control-plane pairing (PR #19)
+## Merged milestone: Web control-plane pairing (PR #19)
 
-**Branch:** `feat/clerk-device-pairing` — Clerk + device pairing + live CLI presence + TUI polish.
+**Merged on `main`:** Clerk + device pairing + live CLI presence + TUI polish.
 
 ### What works now
 
@@ -72,7 +72,7 @@ Two independent indicators:
 - Device lifecycle: `pending` (after browser approve) → `active` (after CLI poll) → `revoked`.
 - Challenge lifecycle: `pending` → `approved`/`denied`/`expired`/`consumed`.
 
-### Qodo review fixes (PR #19, pending re-review)
+### Qodo review fixes included in PR #19
 
 All nine Qodo threads addressed in code:
 
@@ -88,7 +88,7 @@ All nine Qodo threads addressed in code:
 | slow_down ignored | `login.ts` — exponential backoff up to 8× interval |
 | Production gateway monolith | `scripts/realtime-server.ts` → thin wrapper over `createRealtimeGateway()` |
 
-**Merge gate (not yet complete):** Qodo re-review → 0 unresolved threads; manual E2E checklist on PR #19; then merge.
+PR #19 is merged. Its historical manual-E2E and Qodo notes below are retained as validation context, not as an active merge gate.
 
 ### Bug fixes in this slice
 
@@ -157,12 +157,66 @@ Production Socket.IO host is **decision later** (local Bun `:3001` for developme
 | `bun test src` (CLI) | 75 pass |
 | `bun run build` (CLI) | pass |
 
-### Not built yet (next: PR #20)
+### Not built yet (future control-plane milestone)
 
 1. **Task composer → `task.start` → RunEvents in browser → approval UI → PR result**
 2. Neon domain tables (repositories, tasks, runs, run_events, approvals)
-3. 3D clan/island game visualization (asset collection can proceed in parallel)
-4. npm registry publish
+3. npm registry publish
+
+---
+
+## Active milestone: 3D clan game foundation
+
+**Branch:** `feat/clancode-game-foundation`
+
+- Protected `/dashboard` now opens the interactive clan island for the signed-in user.
+- `/dashboard/clan` is an alias; device pairing and revocation remain available at `/dashboard/devices`.
+- The client-only React Three Fiber scene contains the central semantic village, south-west harbor, normal ship, composed lighthouse, river, bridge, watermill, and a deterministic forest dominated by the eastern edge.
+- A typed catalog selects 92 verified GLBs from the four CC0 Kenney kits. `bun run game:assets:check` validates every selected file.
+- Orthographic pan, zoom, reset, building focus/selection, adaptive quality, user-gesture audio, loading UI, and a non-WebGL fallback are wired.
+- The HUD and scene explicitly remain presentation-only. The production website-to-CLI task composer and real RunEvent stream are not connected in this milestone.
+- Rapier placement/editing and Neon layout persistence are intentionally deferred to the next interaction milestone.
+
+### Implemented foundation inventory
+
+| Area | Current implementation |
+|------|------------------------|
+| Protected entry route | `/dashboard` opens the game for a signed-in Clerk user |
+| Supporting routes | `/dashboard/clan` aliases the game; `/dashboard/devices` retains pairing and revocation |
+| Scene loading | Client-only dynamic import with SSR disabled, Suspense progress UI, asset-level error boundary, and textual WebGL fallback |
+| Island composition | Layered grass/beach platform, decorative ocean, river tiles, bridge, waterfall, cliffs, roads, farms, and deterministic environmental dressing |
+| Forest composition | Dense fixed eastern band plus lighter north/north-west framing; seeded output keeps the south-west harbor approach open |
+| Harbor | Docks, normal delivery ship, rowboat, crates, barrels, cannon, coastal rocks, and a lighthouse composed from Pirate tower pieces |
+| Semantic village | Town Hall, Search Tower, Builder Workshop, Validation Forge, Session Lodge, Model Shrine, Approval Gate, Test Camp, Market, Windmill, Watermill, and Backlog Farm |
+| Interaction | Orthographic pan/zoom, bounded camera target, Home/reset, building hover, selection ring, semantic panel, and smooth focus animation |
+| Presentation | ClanCode HUD, real device-presence polling, disabled future task dock, accessible audio toggle, reduced-motion handling, and adaptive quality |
+| Asset boundary | `kenneyGlbUrl()` plus a typed 92-entry catalog; cached GLBs are cloned before pivot/shadow normalization |
+| Tooling | Asset existence verifier, model-bounds inspector, GLB URL tests, and deterministic forest tests |
+| Font guardrail | Unlicensed `Clash_*` files remain unwired; the HUD uses system fallback fonts until redistribution rights are verified |
+
+### Foundation fixes discovered during live browser verification
+
+1. **Terrain obscured most buildings** — oversized `RoundedBox` bevel radii inflated the platform vertically; radii now stay within the mesh height.
+2. **Duplicate React scene keys** — village road tuples placed repeated keys and incorrect coordinates; positions and keys are now unique.
+3. **Building selection was unreliable** — semantic buildings now use explicit invisible hit volumes; ground interaction clears selection and building interaction stops propagation.
+4. **Hover label filled the screen** — Drei `Html distanceFactor={18}` multiplied against the orthographic camera zoom; removing that factor keeps the label compact and anchored over the building.
+5. **Scene appeared washed out** — lighting, tone-mapping exposure, fog range, and shadow-map selection were tuned against the live GLBs.
+
+### Foundation validation (2026-08-29)
+
+| Check | Result |
+|-------|--------|
+| `bun run game:assets:check` | 92 verified GLBs: Fantasy 30, Nature 34, Pirate 14, Survival 14 |
+| `bun run test:game` | 4 pass, 0 fail |
+| `bun run test:pairing` | 15 pass, 0 fail with Neon/local-port access outside the restricted sandbox |
+| `bunx tsc --noEmit` | pass |
+| `bun run lint` | pass with 0 errors; 14 pre-existing CLI warnings |
+| `bun run build -- --webpack` | pass; `/dashboard`, `/dashboard/clan`, and `/dashboard/devices` included |
+| `git diff --check` | pass |
+| `git diff -- clan-cli` | empty |
+| Signed-in Brave verification | island renders at `http://localhost:3000/dashboard`; selection, focus, HUD, harbor, lighthouse, river, and forest verified |
+
+The restricted runner blocks Turbopack's internal local-port helper. This is an environment limitation; the production-style Webpack build passes. No game dependency or source was added to `clan-cli/`.
 
 ---
 
@@ -193,7 +247,8 @@ credentials.json (token + deviceId + controlUrl bundle)
 
 ## Web App — Current State
 
-- Clerk on `/`, protected `/dashboard` (layout-level `auth.protect`), public `/pair`
+- Clerk on `/`, protected game at `/dashboard` (layout-level `auth.protect`), public `/pair`
+- `/dashboard/clan` aliases the game and `/dashboard/devices` preserves pairing/revocation controls
 - Drizzle tables: `devices`, `pairing_challenges`, `pairing_deliveries`
 - Migration: `drizzle/0000_smooth_sasquatch.sql`
 - Dashboard polls `GET /api/devices` every 5s; green connected dot in `device-panel.tsx`
