@@ -2,6 +2,7 @@ import { RunSupervisor } from "../supervisor/supervisor.ts";
 import { formatDoctor, runDoctor } from "../doctor/doctor.ts";
 import { startInteractiveUi } from "./tui.tsx";
 import { runConnectCommand } from "./connect.ts";
+import { runLoginCommand, ensureDevicePaired } from "../pairing/login.ts";
 import type { AgentMode } from "../tools/registry.ts";
 import { createAgentClient } from "../trueforge/agent.ts";
 import { loadTrueforgeConfig } from "../trueforge/config.ts";
@@ -33,6 +34,9 @@ export async function runCli(argv: readonly string[]): Promise<number> {
   }
   if (args[0] === "connect") {
     return await runConnectCommand();
+  }
+  if (args[0] === "login" || args[0] === "pair") {
+    return await runLoginCommand();
   }
   if (args[0] === "new") {
     const supervisor = new RunSupervisor();
@@ -118,7 +122,17 @@ export async function runCli(argv: readonly string[]): Promise<number> {
     }
   }
 
-  await startInteractiveUi({ repo: flagValue(args, "--repo") });
+  if (args.includes("--offline")) {
+    await startInteractiveUi({ repo: flagValue(args, "--repo"), controlPlane: false });
+    return 0;
+  }
+
+  const pairCode = await ensureDevicePaired();
+  if (pairCode !== 0) {
+    return pairCode;
+  }
+
+  await startInteractiveUi({ repo: flagValue(args, "--repo"), controlPlane: true });
   return 0;
 }
 
@@ -161,10 +175,13 @@ function printHelp(): void {
   console.log(`clancode ${VERSION}
 
 Usage:
-  clancode                       Interactive OpenTUI harness
+  clancode                       Interactive OpenTUI harness (pairs once, then auto-connects)
+  clancode --offline             Skip web pairing/connect and run local harness only
   clancode run "task"            Headless run (same supervisor)
   clancode run --mode build "t"  Headless Build mode (isolated worktree)
   clancode connect                 Outbound control-plane connection
+  clancode login                   Pair this laptop with the web control plane
+  clancode pair                    Alias for clancode login
   clancode new [--repo PATH]       Start a fresh TrueForge session
   clancode models                  List TrueForge models
   clancode model <name>            Set preferred model

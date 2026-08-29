@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createServer, type Server as HttpServer } from "node:http";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { Server as SocketIOServer, type Socket } from "socket.io";
 import type { RunEvent } from "@clancode/protocol";
@@ -8,6 +8,7 @@ import type { CommandEnvelope } from "@clancode/protocol";
 import { createRunEvent } from "@clancode/protocol";
 import { connectRealtimeClient } from "./client.ts";
 import { ConnectSession, type ConnectSupervisor } from "./session.ts";
+import { saveStoredCredentials } from "../pairing/store.ts";
 import { SupervisorRuntimeManager } from "../trueforge/runtime-manager.ts";
 import type { RuntimeLease } from "../trueforge/runtime-manager.ts";
 import type { TrueforgeConfig } from "../trueforge/config.ts";
@@ -83,19 +84,14 @@ describe("ConnectSession realtime integration", () => {
   let deviceSocket: Socket | undefined;
   let clientEvents: unknown[] = [];
   let stateHome: string;
-  const deviceId = "device-test-1";
+  const deviceId = "550e8400-e29b-41d4-a716-446655440010";
   const token = "integration-test-token";
 
   beforeEach(async () => {
     clientEvents = [];
     stateHome = join("/tmp", `clancode-realtime-${crypto.randomUUID()}`);
     process.env.XDG_STATE_HOME = stateHome;
-    process.env.CLANCODE_DEVICE_TOKEN = token;
     await mkdir(join(stateHome, "clancode"), { recursive: true });
-    await writeFile(
-      join(stateHome, "clancode", "preferences.json"),
-      JSON.stringify({ deviceId }),
-    );
 
     httpServer = createServer();
     io = new SocketIOServer(httpServer, { cors: { origin: "*" } });
@@ -121,6 +117,13 @@ describe("ConnectSession realtime integration", () => {
       throw new Error("server did not bind");
     }
     baseUrl = `http://127.0.0.1:${address.port}`;
+
+    await saveStoredCredentials({
+      deviceToken: token,
+      deviceId,
+      controlUrl: baseUrl,
+      pairedAt: new Date().toISOString(),
+    });
   });
 
   afterEach(async () => {
@@ -129,6 +132,8 @@ describe("ConnectSession realtime integration", () => {
     deviceSocket = undefined;
     delete process.env.XDG_STATE_HOME;
     delete process.env.CLANCODE_DEVICE_TOKEN;
+    delete process.env.CLANCODE_CONTROL_URL;
+    delete process.env.CLANCODE_DEVICE_ID;
   });
 
   function command(overrides: Partial<CommandEnvelope> & Pick<CommandEnvelope, "type">): CommandEnvelope {
