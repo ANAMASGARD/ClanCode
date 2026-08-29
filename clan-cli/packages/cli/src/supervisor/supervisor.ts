@@ -578,7 +578,7 @@ export class RunSupervisor {
     }
     this.#emit("validation.started", { cwd: this.repo.root });
     const pkg = Bun.file(`${this.repo.root}/package.json`);
-    let command = "bun";
+    const command = "bun";
     let args = ["test"];
     let skipped = false;
     if (await pkg.exists()) {

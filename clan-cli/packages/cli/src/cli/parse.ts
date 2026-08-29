@@ -2,6 +2,7 @@ import { RunSupervisor } from "../supervisor/supervisor.ts";
 import { formatDoctor, runDoctor } from "../doctor/doctor.ts";
 import { startInteractiveUi } from "./tui.tsx";
 import { runConnectCommand } from "./connect.ts";
+import { runLoginCommand } from "../pairing/login.ts";
 import type { AgentMode } from "../tools/registry.ts";
 import { createAgentClient } from "../trueforge/agent.ts";
 import { loadTrueforgeConfig } from "../trueforge/config.ts";
@@ -33,6 +34,9 @@ export async function runCli(argv: readonly string[]): Promise<number> {
   }
   if (args[0] === "connect") {
     return await runConnectCommand();
+  }
+  if (args[0] === "login" || args[0] === "pair") {
+    return await runLoginCommand();
   }
   if (args[0] === "new") {
     const supervisor = new RunSupervisor();
@@ -165,6 +169,8 @@ Usage:
   clancode run "task"            Headless run (same supervisor)
   clancode run --mode build "t"  Headless Build mode (isolated worktree)
   clancode connect                 Outbound control-plane connection
+  clancode login                   Pair this laptop with the web control plane
+  clancode pair                    Alias for clancode login
   clancode new [--repo PATH]       Start a fresh TrueForge session
   clancode models                  List TrueForge models
   clancode model <name>            Set preferred model

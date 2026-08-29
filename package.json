@@ -14,7 +14,9 @@
     "neon:login": "neon auth",
     "neon:link": "neon link --project-id flat-resonance-41016361 -y",
     "neon:env": "neon env pull --file .env.local --service postgres",
-    "neon:setup": "neon link --project-id flat-resonance-41016361 -y && neon env pull --file .env.local --service postgres"
+    "neon:setup": "neon link --project-id flat-resonance-41016361 -y && neon env pull --file .env.local --service postgres",
+    "realtime": "bun run scripts/realtime-server.ts",
+    "test:pairing": "bun test app/lib/pairing"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.8.2",
@@ -27,6 +29,7 @@
     "next": "16.3.2",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "socket.io": "^4.8.3",
     "three": "^0.185.1"
   },
   "devDependencies": {

@@ -9,6 +9,11 @@ describe("cli parse", () => {
     expect(help).toBe(0);
   });
 
+  test("login help mentions pair alias", async () => {
+    const helpCode = await runCli(["bun", "clancode", "--help"]);
+    expect(helpCode).toBe(0);
+  });
+
   test("run without task fails", async () => {
     const code = await runCli(["bun", "clancode", "run"]);
     expect(code).toBe(2);
