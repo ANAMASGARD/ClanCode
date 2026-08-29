@@ -1,10 +1,10 @@
 "use client";
 
 import { Html } from "@react-three/drei";
-import { useFrame } from "@react-three/fiber";
+import gsap from "gsap";
 import type { PropsWithChildren } from "react";
-import { useRef, useState } from "react";
-import { Group, MathUtils } from "three";
+import { useEffect, useRef, useState } from "react";
+import { Group } from "three";
 import type { SemanticBuilding } from "@/app/game/state/default-layout";
 
 type BuildingMarkerProps = PropsWithChildren<{
@@ -24,18 +24,27 @@ export function BuildingMarker({
   const group = useRef<Group>(null);
   const [hovered, setHovered] = useState(false);
 
-  useFrame((_, delta) => {
-    if (!group.current) return;
+  useEffect(() => {
+    const marker = group.current;
+    if (!marker) return;
     const target = selected ? 1.045 : hovered ? 1.025 : 1;
-    const next = MathUtils.damp(group.current.scale.x, target, 9, delta);
-    group.current.scale.setScalar(next);
-    group.current.position.y = MathUtils.damp(
-      group.current.position.y,
-      selected ? 0.18 : hovered ? 0.08 : 0,
-      9,
-      delta,
-    );
-  });
+    const scaleTween = gsap.to(marker.scale, {
+      x: target,
+      y: target,
+      z: target,
+      duration: 0.18,
+      ease: "power2.out",
+    });
+    const liftTween = gsap.to(marker.position, {
+      y: selected ? 0.18 : hovered ? 0.08 : 0,
+      duration: 0.18,
+      ease: "power2.out",
+    });
+    return () => {
+      scaleTween.kill();
+      liftTween.kill();
+    };
+  }, [hovered, selected]);
 
   return (
     <group ref={group}>

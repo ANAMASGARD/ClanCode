@@ -75,7 +75,16 @@ export function ClanGame() {
         </Canvas>
       </SceneErrorBoundary>
       <SceneProgress />
-      <GameHud selected={selected} muted={muted} lowQuality={lowQuality} onHome={reset} onAudio={toggleMuted} onInteract={interact} />
+      <GameHud
+        buildings={DEFAULT_CLAN_LAYOUT}
+        selected={selected}
+        muted={muted}
+        lowQuality={lowQuality}
+        onHome={reset}
+        onAudio={toggleMuted}
+        onInteract={interact}
+        onSelectBuilding={select}
+      />
     </main>
   );
 }

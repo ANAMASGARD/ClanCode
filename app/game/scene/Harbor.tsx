@@ -1,22 +1,22 @@
 "use client";
 
-import { useFrame } from "@react-three/fiber";
-import { useRef } from "react";
-import { DoubleSide, Group, MathUtils } from "three";
+import gsap from "gsap";
+import { useEffect, useRef } from "react";
+import { DoubleSide, Group } from "three";
 import { AssetModel } from "./AssetModel";
 
 export function Harbor({ lowQuality, reducedMotion }: { lowQuality: boolean; reducedMotion: boolean }) {
   const ship = useRef<Group>(null);
-  useFrame((state, delta) => {
-    if (!ship.current || reducedMotion) return;
-    ship.current.position.y = -0.45 + Math.sin(state.clock.elapsedTime * 0.72) * 0.12;
-    ship.current.rotation.z = MathUtils.damp(
-      ship.current.rotation.z,
-      Math.sin(state.clock.elapsedTime * 0.5) * 0.018,
-      2.5,
-      delta,
-    );
-  });
+  useEffect(() => {
+    const vessel = ship.current;
+    if (!vessel || reducedMotion) return;
+    const timeline = gsap.timeline({ repeat: -1, yoyo: true });
+    timeline.to(vessel.position, { y: -0.33, duration: 1.75, ease: "sine.inOut" }, 0);
+    timeline.to(vessel.rotation, { z: 0.018, duration: 2.2, ease: "sine.inOut" }, 0);
+    return () => {
+      timeline.kill();
+    };
+  }, [reducedMotion]);
 
   return (
     <group>
@@ -40,9 +40,19 @@ export function Harbor({ lowQuality, reducedMotion }: { lowQuality: boolean; red
 
 function Lighthouse({ lowQuality, reducedMotion }: { lowQuality: boolean; reducedMotion: boolean }) {
   const beacon = useRef<Group>(null);
-  useFrame((_, delta) => {
-    if (beacon.current && !reducedMotion && !lowQuality) beacon.current.rotation.y += delta * 0.32;
-  });
+  useEffect(() => {
+    const light = beacon.current;
+    if (!light || reducedMotion || lowQuality) return;
+    const tween = gsap.to(light.rotation, {
+      y: `+=${Math.PI * 2}`,
+      duration: 19.5,
+      ease: "none",
+      repeat: -1,
+    });
+    return () => {
+      tween.kill();
+    };
+  }, [lowQuality, reducedMotion]);
   return (
     <group position={[-27, -0.05, 2]} scale={0.82}>
       <AssetModel assetKey="harbor.towerBaseDoor" />

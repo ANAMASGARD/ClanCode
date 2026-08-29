@@ -46,10 +46,6 @@ export function Terrain({ lowQuality, reducedMotion, onReset }: { lowQuality: bo
         smoothness={lowQuality ? 2 : 5}
         position={[1.5, 0.15, -1]}
         receiveShadow
-        onPointerDown={(event) => {
-          event.stopPropagation();
-          onReset();
-        }}
         onDoubleClick={(event) => {
           event.stopPropagation();
           onReset();

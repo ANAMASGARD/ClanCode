@@ -68,6 +68,7 @@ body {
 .clan-hud a,
 .clan-user,
 .clan-context-panel,
+.clan-building-directory,
 .clan-help,
 .clan-task-dock {
   pointer-events: auto;
@@ -87,6 +88,7 @@ body {
 .clan-brand-card,
 .clan-quest-card,
 .clan-context-panel,
+.clan-building-directory,
 .clan-help,
 .clan-task-dock {
   border: 1px solid rgba(227, 255, 225, 0.22);
@@ -240,6 +242,40 @@ body {
   border-radius: 24px 8px 24px 24px;
 }
 
+.clan-building-directory {
+  position: absolute;
+  top: 50%;
+  left: 70px;
+  display: flex;
+  flex-direction: column;
+  width: min(330px, calc(100vw - 100px));
+  max-height: min(620px, calc(100dvh - 140px));
+  padding: 18px;
+  overflow: auto;
+  border-radius: 8px 24px 24px 24px;
+  transform: translateY(-50%);
+}
+
+.clan-building-directory > strong { color: #fff3c1; font-size: 16px; }
+.clan-building-directory > span { margin-top: 4px; color: #9fbbb1; font-size: 10px; line-height: 1.4; }
+.clan-building-directory ul { display: grid; gap: 6px; margin: 14px 0 0; padding: 0; list-style: none; }
+.clan-building-directory button {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  border: 1px solid rgba(231, 255, 230, .11);
+  border-radius: 12px;
+  background: rgba(255,255,255,.035);
+  color: #eff7e3;
+  padding: 9px 11px;
+  text-align: left;
+}
+.clan-building-directory button:hover,
+.clan-building-directory button[aria-pressed="true"] { border-color: rgba(255, 224, 129, .6); background: rgba(255, 216, 112, .1); }
+.clan-building-directory button:focus-visible { outline: 3px solid #ffe37d; outline-offset: 2px; }
+.clan-building-directory button span { color: #9fbbb1; font-size: 9px; }
+
 .clan-context-panel h2 {
   margin: 5px 0 8px;
   color: #fff3c1;
@@ -358,6 +394,7 @@ body {
   .clan-utilities { grid-column: 2; }
   .clan-presence { display: none; }
   .clan-context-panel { top: auto; right: 12px; bottom: 76px; left: 70px; width: auto; max-height: 36vh; overflow: auto; padding: 15px; }
+  .clan-building-directory { top: auto; bottom: 64px; left: 10px; width: min(330px, calc(100vw - 20px)); max-height: 55vh; transform: none; }
   .clan-context-panel h2 { font-size: 19px; }
   .clan-context-panel dl { margin: 11px 0; }
   .clan-rail { top: auto; bottom: 12px; left: 10px; flex-direction: row; transform: none; }

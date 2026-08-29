@@ -1,7 +1,7 @@
 "use client";
 
-import { useFrame } from "@react-three/fiber";
-import { useRef } from "react";
+import gsap from "gsap";
+import { useEffect, useRef } from "react";
 import { Group } from "three";
 import { AssetModel } from "@/app/game/scene/AssetModel";
 
@@ -114,9 +114,7 @@ export function Market() {
 
 export function Windmill({ reducedMotion }: { reducedMotion: boolean }) {
   const blade = useRef<Group>(null);
-  useFrame((_, delta) => {
-    if (blade.current && !reducedMotion) blade.current.rotation.x += delta * 0.45;
-  });
+  useContinuousRotation(blade, reducedMotion, 14);
   return (
     <group scale={2.4} rotation={[0, Math.PI / 2, 0]}>
       <AssetModel assetKey="village.windmill" />
@@ -129,9 +127,7 @@ export function Windmill({ reducedMotion }: { reducedMotion: boolean }) {
 
 export function Watermill({ reducedMotion }: { reducedMotion: boolean }) {
   const wheel = useRef<Group>(null);
-  useFrame((_, delta) => {
-    if (wheel.current && !reducedMotion) wheel.current.rotation.x += delta * 0.55;
-  });
+  useContinuousRotation(wheel, reducedMotion, 11.5);
   return (
     <group scale={2.55} rotation={[0, Math.PI / 2, 0]}>
       <AssetModel assetKey="village.watermill" />
@@ -154,4 +150,24 @@ export function Farm() {
       <AssetModel assetKey="village.fence" position={[0, 0, -0.9]} scale={[3.5, 1, 1]} />
     </group>
   );
+}
+
+function useContinuousRotation(
+  target: React.RefObject<Group | null>,
+  reducedMotion: boolean,
+  duration: number,
+) {
+  useEffect(() => {
+    const group = target.current;
+    if (!group || reducedMotion) return;
+    const tween = gsap.to(group.rotation, {
+      x: `+=${Math.PI * 2}`,
+      duration,
+      ease: "none",
+      repeat: -1,
+    });
+    return () => {
+      tween.kill();
+    };
+  }, [duration, reducedMotion, target]);
 }
