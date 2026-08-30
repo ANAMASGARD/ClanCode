@@ -3,7 +3,7 @@ import { CATALOG_ENTRIES, GAME_ASSETS } from "@/app/game/assets/catalog";
 import { DECORATIVE_PLACEMENTS } from "@/app/game/state/decorative-layout";
 import { ROAD_TILES } from "@/app/game/state/roads";
 import { SEMANTIC_PLACEMENTS } from "@/app/game/state/semantic-layout";
-import { WALL_GATE, WALL_RING } from "@/app/game/state/walls";
+import { BEACH_WALL } from "@/app/game/state/walls";
 
 describe("game asset catalog", () => {
   test("has unique keys and finite metrics", () => {
@@ -22,7 +22,21 @@ describe("game asset catalog", () => {
 
   test("curates a broad but bounded asset set", () => {
     expect(CATALOG_ENTRIES.length).toBeGreaterThanOrEqual(170);
-    expect(CATALOG_ENTRIES.length).toBeLessThanOrEqual(250);
+    expect(CATALOG_ENTRIES.length).toBeLessThanOrEqual(285);
+  });
+
+  test("includes round canopy trees and shoreline rocks", () => {
+    expect(GAME_ASSETS["village.tree"]).toBeDefined();
+    expect(GAME_ASSETS["village.treeHigh"]).toBeDefined();
+    expect(GAME_ASSETS["village.treeFat"]).toBeUndefined();
+    expect(GAME_ASSETS["nature.treeFat"]).toBeDefined();
+    expect(GAME_ASSETS["nature.treeDetailed"]).toBeDefined();
+    expect(GAME_ASSETS["nature.treeSimple"]).toBeDefined();
+    expect(GAME_ASSETS["village.rockLarge"]).toBeDefined();
+    expect(GAME_ASSETS["nature.rockTallA"]).toBeDefined();
+    expect(GAME_ASSETS["nature.stoneLargeA"]).toBeDefined();
+    expect(GAME_ASSETS["townHall.wallArch"]).toBeDefined();
+    expect(GAME_ASSETS["townHall.roofPoint"]).toBeDefined();
   });
 });
 
@@ -40,11 +54,11 @@ describe("layout data", () => {
     }
   });
 
-  test("wall ring references catalog assets and includes a gate", () => {
-    for (const segment of WALL_RING) {
+  test("beach rampart references catalog assets", () => {
+    expect(BEACH_WALL.length).toBeGreaterThan(0);
+    for (const segment of BEACH_WALL) {
       expect(GAME_ASSETS[segment.assetKey]).toBeDefined();
     }
-    expect(GAME_ASSETS[WALL_GATE.assetKey]).toBeDefined();
   });
 
   test("town hall remains central", () => {

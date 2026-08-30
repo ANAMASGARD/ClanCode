@@ -6,10 +6,19 @@ import gsap from "gsap";
 import { useEffect, useRef } from "react";
 import { MOUSE, TOUCH, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import {
+  CAMERA_DEFAULT_ZOOM,
+  CAMERA_MAX_ZOOM,
+  CAMERA_MIN_ZOOM,
+  CAMERA_PAN_HALF_X,
+  CAMERA_PAN_HALF_Z_NEG,
+  CAMERA_PAN_HALF_Z_POS,
+  PLOT_HALF,
+} from "@/app/game/state/island";
 
 const OVERVIEW_POSITION = new Vector3(42, 48, 42);
-const MIN_TARGET = new Vector3(-28, 0, -24);
-const MAX_TARGET = new Vector3(28, 0, 24);
+const MIN_TARGET = new Vector3(-CAMERA_PAN_HALF_X, 0, -CAMERA_PAN_HALF_Z_NEG);
+const MAX_TARGET = new Vector3(CAMERA_PAN_HALF_X, 0, CAMERA_PAN_HALF_Z_POS);
 
 export function CameraRig({
   focus,
@@ -25,7 +34,7 @@ export function CameraRig({
     const orbit = controls.current;
     if (!orbit) return;
     const target = focus ? new Vector3(...focus) : new Vector3(0, 0, 0);
-    const offset = focus ? new Vector3(22, 25, 22) : OVERVIEW_POSITION.clone();
+    const offset = focus ? new Vector3(18, 22, 18) : OVERVIEW_POSITION.clone();
     const duration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 0.85;
     const cameraTween = gsap.to(camera.position, {
       x: target.x + offset.x,
@@ -60,9 +69,9 @@ export function CameraRig({
       <OrthographicCamera
         makeDefault
         position={OVERVIEW_POSITION.toArray()}
-        zoom={27}
+        zoom={CAMERA_DEFAULT_ZOOM}
         near={0.1}
-        far={240}
+        far={260}
       />
       <OrbitControls
         ref={controls}
@@ -70,8 +79,8 @@ export function CameraRig({
         enableRotate={false}
         enableDamping
         dampingFactor={0.08}
-        minZoom={14}
-        maxZoom={44}
+        minZoom={CAMERA_MIN_ZOOM}
+        maxZoom={CAMERA_MAX_ZOOM}
         zoomToCursor
         screenSpacePanning={false}
         mouseButtons={{ LEFT: MOUSE.PAN, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }}
@@ -80,3 +89,5 @@ export function CameraRig({
     </>
   );
 }
+
+export { PLOT_HALF };

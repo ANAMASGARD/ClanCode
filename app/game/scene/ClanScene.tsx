@@ -7,6 +7,7 @@ import { Harbor } from "./Harbor";
 import { Lighting } from "./Lighting";
 import { Terrain } from "./Terrain";
 import { Village } from "./Village";
+import { Villagers } from "./Villagers";
 
 type ClanSceneProps = {
   selectedId: SemanticBuildingId | null;
@@ -22,10 +23,15 @@ export function ClanScene(props: ClanSceneProps) {
   return (
     <>
       <Lighting lowQuality={props.lowQuality} />
-      <Terrain lowQuality={props.lowQuality} reducedMotion={props.reducedMotion} onReset={props.onReset} />
+      <Terrain lowQuality={props.lowQuality} onReset={props.onReset} />
+      <Village
+        selectedId={props.selectedId}
+        onSelect={props.onSelect}
+        reducedMotion={props.reducedMotion}
+      />
+      <Harbor reducedMotion={props.reducedMotion} />
+      <Villagers reducedMotion={props.reducedMotion} />
       <Forest lowQuality={props.lowQuality} />
-      <Harbor lowQuality={props.lowQuality} reducedMotion={props.reducedMotion} />
-      <Village selectedId={props.selectedId} onSelect={props.onSelect} reducedMotion={props.reducedMotion} />
       <CameraRig focus={props.focus} resetToken={props.resetToken} />
     </>
   );

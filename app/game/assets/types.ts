@@ -6,7 +6,8 @@ export type GameAssetRole =
   | "prop"
   | "forest"
   | "water"
-  | "tool";
+  | "tool"
+  | "character";
 
 export type PivotMode = "preserve-origin" | "ground-center" | "custom";
 

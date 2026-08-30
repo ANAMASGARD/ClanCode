@@ -3,10 +3,20 @@ export type DecorativePrefabId =
   | "VillageHouseB"
   | "VillageHouseC"
   | "VillageHouseD"
+  | "Cottage"
+  | "Bakery"
+  | "Barracks"
+  | "LumberYard"
   | "StorageYard"
   | "GuardPost"
+  | "WatchTower"
+  | "DefensePost"
+  | "ArmyCamp"
   | "MarketCluster"
-  | "GardenCluster";
+  | "GardenCluster"
+  | "CropField"
+  | "SmallWindmill"
+  | "Well";
 
 export type DecorativePlacement = {
   id: string;
@@ -16,21 +26,28 @@ export type DecorativePlacement = {
   rotation?: number;
 };
 
+/**
+ * Light decorative accents only. The plot is deliberately uncrowded so the
+ * named buildings read clearly and villagers have open ground to roam.
+ */
 export const DECORATIVE_PLACEMENTS: DecorativePlacement[] = [
-  { id: "house-a1", prefab: "VillageHouseA", tileX: -9, tileZ: 0 },
-  { id: "house-a2", prefab: "VillageHouseA", tileX: 9, tileZ: 0, rotation: Math.PI },
-  { id: "house-b1", prefab: "VillageHouseB", tileX: -8, tileZ: 5, rotation: Math.PI / 2 },
-  { id: "house-b2", prefab: "VillageHouseB", tileX: 8, tileZ: -3, rotation: -Math.PI / 2 },
-  { id: "house-c1", prefab: "VillageHouseC", tileX: -3, tileZ: -9 },
-  { id: "house-c2", prefab: "VillageHouseC", tileX: 3, tileZ: -9, rotation: Math.PI },
-  { id: "house-d1", prefab: "VillageHouseD", tileX: 10, tileZ: 4 },
-  { id: "house-d2", prefab: "VillageHouseD", tileX: -10, tileZ: -2, rotation: Math.PI / 2 },
-  { id: "house-d3", prefab: "VillageHouseD", tileX: 9, tileZ: -7 },
-  { id: "house-d4", prefab: "VillageHouseD", tileX: -9, tileZ: 7 },
-  { id: "storage-1", prefab: "StorageYard", tileX: -7, tileZ: 6 },
-  { id: "storage-2", prefab: "StorageYard", tileX: 7, tileZ: -8, rotation: Math.PI / 2 },
-  { id: "guard-1", prefab: "GuardPost", tileX: 5, tileZ: 9 },
-  { id: "guard-2", prefab: "GuardPost", tileX: -5, tileZ: 9, rotation: Math.PI },
-  { id: "market-1", prefab: "MarketCluster", tileX: -6, tileZ: -7 },
-  { id: "garden-1", prefab: "GardenCluster", tileX: 0, tileZ: -5 },
+  // Wind farm at the four outer corners
+  { id: "windmill-nw", prefab: "SmallWindmill", tileX: -9, tileZ: -9 },
+  { id: "windmill-ne", prefab: "SmallWindmill", tileX: 9, tileZ: -9 },
+  { id: "windmill-sw", prefab: "SmallWindmill", tileX: -9, tileZ: 6 },
+  { id: "windmill-se", prefab: "SmallWindmill", tileX: 9, tileZ: 6 },
+
+  // Crop rows flanking the north approach
+  { id: "crops-nw", prefab: "CropField", tileX: -3, tileZ: -6 },
+  { id: "crops-ne", prefab: "CropField", tileX: 3, tileZ: -6 },
+
+  // A couple of homes and a well near the core
+  { id: "house-nw", prefab: "VillageHouseA", tileX: -6, tileZ: -6 },
+  { id: "house-ne", prefab: "VillageHouseD", tileX: 6, tileZ: -6, rotation: Math.PI },
+  { id: "well-w", prefab: "Well", tileX: -6, tileZ: 0 },
+  { id: "market-sw", prefab: "MarketCluster", tileX: -3, tileZ: 3 },
+
+  // Gate guards
+  { id: "guard-w", prefab: "GuardPost", tileX: -3, tileZ: 9 },
+  { id: "guard-e", prefab: "GuardPost", tileX: 3, tileZ: 9 },
 ];

@@ -2,21 +2,20 @@
 
 import { AssetModel } from "@/app/game/scene/AssetModel";
 
-/** Landmark clan hall — stone base, timber upper floor, unstretched roof tower. */
+/** Sample.png gatehouse — wide stone arch, timber upper storey, steep red gable. */
 export function TownHall() {
   return (
     <group>
-      {/* Raised stone foundation */}
-      {[-1, 0, 1].flatMap((x) =>
-        [-1, 0, 1].map((z) => (
-          <AssetModel
-            key={`base:${x}:${z}`}
-            assetKey={x === 0 && z === 1 ? "townHall.wallDoor" : "townHall.wallStone"}
-            position={[x, 0, z]}
-          />
-        )),
-      )}
-      {/* Timber upper floor */}
+      {/* Stone ground floor with wide arch passage */}
+      <AssetModel assetKey="townHall.wallStone" position={[-1, 0, 0]} />
+      <AssetModel assetKey="townHall.wallStone" position={[1, 0, 0]} />
+      <AssetModel assetKey="townHall.wallStone" position={[-1, 0, -1]} />
+      <AssetModel assetKey="townHall.wallStone" position={[1, 0, -1]} />
+      <AssetModel assetKey="townHall.wallStone" position={[0, 0, -1]} rotation={[0, Math.PI, 0]} />
+      <AssetModel assetKey="townHall.wallDoorWide" position={[0, 0, 1]} />
+      <AssetModel assetKey="townHall.wallArch" position={[0, 0, 0]} rotation={[0, Math.PI, 0]} />
+
+      {/* Timber-framed upper storey */}
       <AssetModel assetKey="townHall.wallWoodDoor" position={[0, 1, 1]} />
       <AssetModel assetKey="townHall.wallWoodWindow" position={[-1, 1, 1]} />
       <AssetModel assetKey="townHall.wallWoodWindow" position={[1, 1, 1]} />
@@ -25,18 +24,18 @@ export function TownHall() {
       <AssetModel assetKey="townHall.wallWoodCorner" position={[-1, 1, -1]} />
       <AssetModel assetKey="townHall.wallWoodCorner" position={[1, 1, -1]} />
       <AssetModel assetKey="townHall.wallWood" position={[0, 1, -1]} rotation={[0, Math.PI, 0]} />
-      {/* Main roof mass */}
+
+      {/* Steep red gable roof mass */}
       <AssetModel assetKey="townHall.roofHighGable" position={[0, 2, 0]} rotation={[0, Math.PI / 2, 0]} />
-      <AssetModel assetKey="townHall.roofHighPoint" position={[0, 3.1, 0]} />
-      <AssetModel assetKey="townHall.chimney" position={[1.2, 2.8, -0.8]} />
-      {/* Entrance */}
-      <AssetModel assetKey="townHall.stairsWide" position={[0, 0, 2.05]} />
-      <AssetModel assetKey="townHall.balconyFence" position={[0, 1.05, 1.55]} />
-      {/* Accents */}
-      <AssetModel assetKey="village.bannerRed" position={[-1.6, 1.8, 1.5]} />
-      <AssetModel assetKey="village.bannerGreen" position={[1.6, 1.8, 1.5]} />
-      <AssetModel assetKey="village.lantern" position={[-1.4, 0.2, 1.8]} />
-      <AssetModel assetKey="village.lantern" position={[1.4, 0.2, 1.8]} />
+      <AssetModel assetKey="townHall.roofHighPoint" position={[0, 3.15, 0]} />
+      <AssetModel assetKey="townHall.chimney" position={[1.3, 2.9, -0.7]} />
+
+      {/* Entrance plaza */}
+      <AssetModel assetKey="townHall.stairsWide" position={[0, 0, 2.1]} />
+      <AssetModel assetKey="townHall.balconyFence" position={[0, 1.05, 1.6]} />
+      <AssetModel assetKey="village.bannerRed" position={[0, 2.4, 1.55]} scale={1.1} />
+      <AssetModel assetKey="village.lantern" position={[-1.5, 0.2, 1.9]} />
+      <AssetModel assetKey="village.lantern" position={[1.5, 0.2, 1.9]} />
     </group>
   );
 }

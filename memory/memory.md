@@ -1,6 +1,6 @@
 # ClanCode — Project Memory
 
-**Last updated:** 2026-08-30 (clan village visual redesign — scene only)
+**Last updated:** 2026-08-30 (Clash-style plot scene clone — scene only)
 
 ## What This Repo Is
 
@@ -165,19 +165,55 @@ Production Socket.IO host is **decision later** (local Bun `:3001` for developme
 
 ---
 
-## Active milestone: Clan village visual redesign (scene only)
+## Active milestone: Clash-style plot scene + village (presentation)
+
+**Branch:** `feat/clancode-game-foundation` (in progress on scene layer)
+
+Clash-style plot island with Kenney stand-in village on the gridded grass:
+
+- **Terrain** — flat stacked axis-aligned squares (`app/game/scene/terrain/`): dark forest floor clipped at `WATER_EDGE_Z`, medium-green rim, dirt edge, procedural gridded plot shader, clean orange sand band, Kenney blue sea.
+- **Sea** — instanced `ground_riverOpen` tiles tinted toward reference blue over a deeper backing plane.
+- **Shore** — flat sand + foam strip only.
+- **Canopy** — dense instanced Fantasy Town Kit pines (`village.tree*`) mixed with Nature pines, plus Fantasy kit rocks (`village.rock*`), fully covering green plains and outer forest. **No trees on the clan plot.** Beach/shore wedge stays open.
+- **Village** — `Village.tsx` mounted on the plot in `ClanScene.tsx`. **No interior walls.** 12 semantic buildings plus 12 light decorative accents. Town Hall, houses, windmill, and watermill restyled from Fantasy Town Kit modular pieces to match Sample.png. Workshop/forge/pirate towers unchanged.
+- **Beach rampart** — the only wall. `walls.ts` generates a single instanced `harbor.castleWall` line on the green rim at `BEACH_WALL_Z = 26`, with a centre gate opening (`BEACH_GATE_HALF_X`), flanking small towers, and `harbor.towerWatch` at both ends. The Approval Gate building stands in the opening.
+- **Harbor** — `Harbor.tsx` + `shore-layout.ts`: wooden pier from the sand into the sea, three bobbing Kenney ships plus a rowboat beyond `WATER_EDGE_Z`, crates/barrels/palms on the sand, and a shore lookout ("review post") tower inside the rampart. Bobbing is disabled under reduced motion.
+- **Villagers** — `Villagers.tsx` + `villager-wander.ts`: 10 Kenney **Blocky Characters** (5th kit, CC0) roaming the plot at random. Each picks a random walkable target (3–10 unit hops), steers away from buildings instead of clipping them, and occasionally pauses. `walk`/`idle` GLB animation clips are blended imperatively via `setEffectiveWeight`; position/heading mutate refs in `useFrame`, so no per-frame React state. `isWalkable()` derives blockers from the semantic + decorative placements, so thinning buildings automatically opens more ground.
+- **Roads** — Town Hall plaza plus a main avenue from the plaza to the beach gate (`roads.ts`, road GLBs scaled to one tile).
+- **Stone outcrops** — four light-gray `stone_*` props at top-right.
+- **Shared constants** — `app/game/state/island.ts` drives terrain, canopy, water, camera lock, beach-wall geometry, and plot-bounds tests. `seeded-random.ts` holds the shared `mulberry32` PRNG used by the canopy and villager spawns.
+- **Catalog** — **280** verified GLBs across five kits (Fantasy Town 77 after arch/curved/roof-point + instanceable forest pines/rocks); villager models preloaded in `Villagers.tsx`.
+- **HUD** — the disabled "Task control connects next" dock was removed from `GameHud.tsx` and `globals.css`.
+- **Lighting/camera** — forest-green background; ortho zoom locked at default (no zoom-out).
+
+### Plot + village validation (2026-08-30)
+
+| Check | Result |
+|-------|--------|
+| `bun run game:assets:check` | 280 verified GLBs (Fantasy 77, Nature 122, Pirate 37, Survival 26, BlockyCharacters 18) |
+| `bun run test:game` | 42 pass |
+| `bunx tsc --noEmit` | pass |
+| `bun run lint` | pass (0 errors) |
+| `bun run build -- --webpack` | pass |
+| `git diff -- clan-cli` | empty |
+
+**Canopy density (full quality, seed `CANOPY_SEED`):** ~2,064 instanced trees + ~145 Fantasy kit rocks; zero trees on the gridded plot (`PLOT_EXCLUSION_HALF = 24.2`).
+
+**Clan building restyle:** Town Hall gatehouse, houses, composed windmill tower (`wall-curved` + `roof-point`), and timber watermill use Fantasy Town Kit modular pieces from Sample.png. Workshop/forge/pirate towers unchanged.
+
+Visual screenshot passes at 1440×900, 1366×768, and 390×844 require a signed-in Clerk session at `/dashboard/clan`.
+
+---
+
+## Previous milestone: Clan village visual redesign (superseded scene)
 
 **Branch:** `feat/clancode-village-visual-redesign` (from game foundation)
 
 - Flat irregular grass island replaces rectangular `RoundedBox` slabs; west beach, varied cliff edges, brightened water and sky.
 - Asset catalog expanded to **231** curated Kenney GLBs with measured `uniformScale`, `pivotMode`, `district`, and `instanceable` flags.
-- `AssetModel` honours modular origins (`preserve-origin`) vs standalone props (`ground-center`).
 - Data-driven layout modules: walls, roads, semantic/decorative placements, harbor props.
-- Diamond-reading castle wall ring (world-axis square on isometric camera); Town Hall rebuilt without stretched roofs.
-- 16 decorative house/yard prefabs outside the walled core; continuous road network.
-- Three-sided forest bands (north/east/south) with 120+ trees; west harbor district with two ships, lighthouse, palms, rocks.
-- Removed committed `?debugAssets=1` overlay; softened shell vignette; brighter lighting and camera framing.
-- HUD unchanged except vignette/shell background tweak. No `clan-cli/` changes. Physics/persistence still deferred.
+- Three-sided forest bands with 120+ individual trees; harbor district with ships and lighthouse.
+- **Superseded** by the plot scene clone above (empty plot, no harbor, instanced canopy).
 
 ### Visual redesign validation (2026-08-30)
 

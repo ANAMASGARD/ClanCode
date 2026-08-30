@@ -202,6 +202,25 @@ export function survivalProp(key: string, model: string, district: GameAssetDist
   });
 }
 
+/**
+ * Blocky villager characters. Source models are 2.7 units tall with their
+ * origin at the feet; 0.5 puts them at readable village scale.
+ */
+export function blockyCharacter(key: string, model: string) {
+  return defineAsset(key, {
+    kit: "blockyCharacters",
+    model,
+    role: "character",
+    district: "village",
+    uniformScale: 0.5,
+    pivotMode: "ground-center",
+    pivotOffset: [0, 0, 0],
+    castsShadow: true,
+    receivesShadow: true,
+    instanceable: false,
+  });
+}
+
 export function withOverrides(
   base: GameAssetDefinition,
   overrides: Partial<AssetInput>,

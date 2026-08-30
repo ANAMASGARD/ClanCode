@@ -116,12 +116,6 @@ export function GameHud({ buildings, selected, muted, lowQuality, onHome, onAudi
         ) : null}
       </AnimatePresence>
 
-      <motion.div className="clan-task-dock" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
-        <span className="clan-task-glyph">›_</span>
-        <span><strong>Task control connects next</strong><small>The paired-laptop run pipeline is not wired in this foundation.</small></span>
-        <button type="button" disabled>Start quest</button>
-      </motion.div>
-
       <AnimatePresence>
         {helpOpen ? (
           <motion.aside className="clan-help" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}>

@@ -2,16 +2,25 @@ import type { ComponentType } from "react";
 import type { SemanticBuildingId } from "@/app/game/state/default-layout";
 import type { DecorativePrefabId } from "@/app/game/state/decorative-layout";
 import {
+  ArmyCamp,
+  Bakery,
+  Barracks,
+  Cottage,
+  CropField,
+  DefensePost,
   GardenCluster,
   GuardPost,
+  LumberYard,
   MarketCluster,
   StorageYard,
   VillageHouseA,
   VillageHouseB,
   VillageHouseC,
   VillageHouseD,
+  WatchTower,
+  Well,
 } from "./DecorativeBuildings";
-import { Farm, Watermill, Windmill } from "./Mills";
+import { Farm, SmallWindmill, Watermill, Windmill } from "./Mills";
 import {
   ApprovalGate,
   BuilderWorkshop,
@@ -163,16 +172,26 @@ export const SEMANTIC_PREFABS: Record<
 
 export const DECORATIVE_PREFABS: Record<
   DecorativePrefabId,
-  ComponentType
+  ComponentType<{ reducedMotion?: boolean }>
 > = {
   VillageHouseA,
   VillageHouseB,
   VillageHouseC,
   VillageHouseD,
+  Cottage,
+  Bakery,
+  Barracks,
+  LumberYard,
   StorageYard,
   GuardPost,
+  WatchTower,
+  DefensePost,
+  ArmyCamp,
   MarketCluster,
   GardenCluster,
+  CropField,
+  SmallWindmill,
+  Well,
 };
 
 export function getSemanticPrefab(id: SemanticBuildingId): PrefabDefinition {
