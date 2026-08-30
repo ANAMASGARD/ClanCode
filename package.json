@@ -23,10 +23,12 @@
     "test:clan-layout": "bun test app/lib/clan-layout app/game/state/layout-editor.test.ts"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.52",
     "@clerk/nextjs": "^7.8.2",
     "@neondatabase/serverless": "^1.1.0",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
+    "ai": "^7.0.85",
     "drizzle-orm": "^0.45.2",
     "framer-motion": "^13.1.1",
     "gsap": "^3.15.0",
@@ -34,7 +36,8 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "socket.io": "^4.8.3",
-    "three": "^0.185.1"
+    "three": "^0.185.1",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -47,6 +50,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.2",
     "neon": "^4.10.2",
+    "socket.io-client": "^4.8.3",
     "tailwindcss": "^4",
     "typescript": "^5"
   },

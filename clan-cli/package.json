@@ -6,6 +6,9 @@
   ],
   "scripts": {
     "dev:clan": "bun run --watch packages/cli/src/main.tsx",
+    "cli": "bun run --cwd packages/cli src/cli.ts",
+    "login": "bun run --cwd packages/cli src/cli.ts login",
+    "pair": "bun run --cwd packages/cli src/cli.ts pair",
     "trueforge:smoke": "bun run --cwd packages/cli trueforge:smoke",
     "supervisor:smoke": "bun run --cwd packages/cli supervisor:smoke",
     "turn:smoke": "bun run --cwd packages/cli turn:smoke",

@@ -1,7 +1,7 @@
 import { hasStoredDeviceCredentials } from "../pairing/store.ts";
 import { connectRealtimeClient, type RealtimeClient } from "./client.ts";
 import { resolveRealtimeCredentials } from "./credentials.ts";
-import { ConnectSession } from "./session.ts";
+import { ConnectSession, type ConnectSupervisor } from "./session.ts";
 
 export type ControlPlaneState = "offline" | "connecting" | "connected" | "error";
 
@@ -12,6 +12,8 @@ export type ControlPlaneLinkOptions = {
   onState: (state: ControlPlaneState) => void;
   connect?: () => Promise<RealtimeClient>;
   createSession?: () => ConnectSession;
+  getSharedSupervisor?: () => ConnectSupervisor | undefined;
+  onRemoteTask?: (input: { prompt: string; mode: "plan" | "build" | undefined }) => void;
   retryMs?: number;
 };
 
@@ -84,7 +86,10 @@ export function startControlPlaneLink(
           return;
         }
         client = next;
-        session = options.createSession?.() ?? new ConnectSession();
+        session = options.createSession?.() ?? new ConnectSession({
+          getSharedSupervisor: options.getSharedSupervisor,
+          onRemoteTask: options.onRemoteTask,
+        });
         await session.start(next);
         setState("connected");
         next.socket.on("disconnect", onDisconnect);

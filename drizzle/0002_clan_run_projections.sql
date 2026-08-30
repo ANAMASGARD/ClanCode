@@ -1,0 +1,22 @@
+CREATE TABLE "clan_run_projections" (
+	"clerk_user_id" text PRIMARY KEY NOT NULL,
+	"device_id" text,
+	"run_id" text,
+	"requested_mode" text,
+	"phase" text DEFAULT 'idle' NOT NULL,
+	"prompt_preview" text,
+	"last_tool" text,
+	"last_event_type" text,
+	"approvals" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"approval_decision" text,
+	"validation_status" text DEFAULT 'idle' NOT NULL,
+	"delivery_stage" text DEFAULT 'idle' NOT NULL,
+	"pr_url" text,
+	"pr_number" integer,
+	"storeys" integer DEFAULT 1 NOT NULL,
+	"changed" boolean DEFAULT false NOT NULL,
+	"last_sequence" integer DEFAULT 0 NOT NULL,
+	"last_completed_run_id" text,
+	"repository_display" text,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);

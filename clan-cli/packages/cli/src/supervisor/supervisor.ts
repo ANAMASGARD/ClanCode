@@ -392,7 +392,6 @@ export class RunSupervisor {
         if (typeof event.content === "string") {
           this.lastModelText += event.content;
           this.#emit("model.delta", { text: event.content, turnId: this.turnId });
-          this.#emit("agent.message", { text: event.content });
         }
         break;
       case "model.message": {
@@ -553,19 +552,23 @@ export class RunSupervisor {
   }
 
   async setMode(mode: AgentMode): Promise<void> {
-    if (mode === this.mode && (mode === "plan" || this.worktree !== undefined)) {
-      if (mode === "plan" && this.primaryRepo !== undefined) {
-        this.repo = this.primaryRepo;
-      }
+    if (mode === this.mode && mode === "plan" && this.primaryRepo !== undefined) {
+      this.repo = this.primaryRepo;
+      return;
+    }
+    if (mode === this.mode && mode === "build" && this.worktree !== undefined) {
+      this.repo = await resolveRepository(this.worktree.worktreePath);
       return;
     }
     this.mode = mode;
     this.sessionId = undefined;
     this.#mappingId = undefined;
-    if (mode === "build" && this.primaryRepo !== undefined && this.worktree === undefined) {
-      this.worktree = await createTaskWorktree(this.primaryRepo, "build");
+    if (mode === "build" && this.primaryRepo !== undefined) {
+      if (this.worktree === undefined) {
+        this.worktree = await createTaskWorktree(this.primaryRepo, "build");
+        this.#emit("git.branch_created", this.worktree);
+      }
       this.repo = await resolveRepository(this.worktree.worktreePath);
-      this.#emit("git.branch_created", this.worktree);
     }
     if (mode === "plan" && this.primaryRepo !== undefined) {
       this.repo = this.primaryRepo;

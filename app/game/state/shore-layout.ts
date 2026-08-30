@@ -36,14 +36,6 @@ export const VESSEL_PLACEMENTS: FloatingPlacement[] = [
     bobPhase: 0,
   },
   {
-    id: "ship-medium",
-    assetKey: "harbor.shipMedium",
-    position: [8, WATER_Y, 44],
-    rotation: -Math.PI * 0.12,
-    scale: 1,
-    bobPhase: 1.9,
-  },
-  {
     id: "ship-small",
     assetKey: "harbor.shipSmall",
     position: [24, WATER_Y, 50],
@@ -77,6 +69,16 @@ export const SHORE_PROPS: ShorePlacement[] = [
 
 /** Shore lookout that watches the harbor approach, just inside the rampart. */
 export const REVIEW_POST_POSITION = [-18, 0, 22.5] as const;
+
+/** Medium ship reserved for human-triggered PR delivery. Not an ambient Harbor vessel. */
+export const PR_COURIER_PLACEMENT: FloatingPlacement = {
+  id: "pr-courier",
+  assetKey: "harbor.shipMedium",
+  position: [8, WATER_Y, 44],
+  rotation: -Math.PI * 0.12,
+  scale: 1,
+  bobPhase: 1.9,
+};
 
 export const SHORE_SAND_Y = SAND_Y;
 export const SHORE_WATER_Y = WATER_Y;

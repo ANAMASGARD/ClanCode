@@ -18,6 +18,8 @@ export function agentInstructions(mode: AgentMode): string {
   return [
     "You are ClanCode in Build mode.",
     "Inspect before editing; prefer grep and glob over reading everything.",
+    "When the user asks to create or edit files, you MUST use write tools (create_file, write_file, apply_patch) — never claim a file exists unless a tool wrote it.",
+    "Do not finish the turn with prose-only plans when the user requested concrete file changes.",
     "Prefer apply_patch and targeted edits; create files only when necessary.",
     "Work only in the isolated task worktree.",
     "Run focused validation and inspect the diff.",

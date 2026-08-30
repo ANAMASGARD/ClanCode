@@ -17,19 +17,21 @@ export async function completeSuccessfulTurn(deps: BuildFinalizeDeps): Promise<v
     const validation = await deps.runValidation();
     deps.setReady();
     if (validation.skipped) {
-      deps.emit("run.completed", {
-        turnId: deps.turnId,
-        validationSkipped: true,
-      });
+    deps.emit("run.completed", {
+      turnId: deps.turnId,
+      validationSkipped: true,
+      mutated: true,
+    });
       return;
     }
     deps.emit("run.completed", {
       turnId: deps.turnId,
       validated: validation.ok,
       validationFailed: !validation.ok,
+      mutated: true,
     });
     return;
   }
   deps.setReady();
-  deps.emit("run.completed", { turnId: deps.turnId });
+  deps.emit("run.completed", { turnId: deps.turnId, mutated: deps.mutatedThisTurn });
 }

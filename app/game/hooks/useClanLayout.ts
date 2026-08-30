@@ -6,7 +6,7 @@ import {
   DEFAULT_SEED_LAYOUT,
   type ClanPlacement,
 } from "@/app/game/state/clan-layout";
-import { mergeSavedLayout } from "@/app/game/state/layout-editor";
+import { mergeSavedLayout, removePlacement } from "@/app/game/state/layout-editor";
 
 type ClanLayoutState = {
   layout: ClanPlacement[];
@@ -18,6 +18,7 @@ type ClanLayoutState = {
   setEditMode: (value: boolean) => void;
   setDraft: (updater: ClanPlacement[] | ((prev: ClanPlacement[]) => ClanPlacement[])) => void;
   done: () => void;
+  removeAndSave: (placementId: string) => Promise<boolean>;
 };
 
 function sameLayout(left: ClanPlacement[], right: ClanPlacement[]): boolean {
@@ -148,6 +149,36 @@ export function useClanLayout(): ClanLayoutState {
     }
   }, [draft, savedLayout]);
 
+  const removeAndSave = useCallback(async (placementId: string): Promise<boolean> => {
+    const next = removePlacement(savedLayout, placementId);
+    if (next === null) {
+      return false;
+    }
+    const generation = ++persistGeneration.current;
+    setSaving(true);
+    setError(null);
+    try {
+      const merged = await putLayout(next);
+      if (generation !== persistGeneration.current) {
+        return false;
+      }
+      skipAutosave.current = true;
+      setSavedLayout(merged);
+      setDraftState(merged);
+      return true;
+    } catch (cause) {
+      if (generation !== persistGeneration.current) {
+        return false;
+      }
+      setError(cause instanceof Error ? cause.message : "Save failed");
+      return false;
+    } finally {
+      if (generation === persistGeneration.current) {
+        setSaving(false);
+      }
+    }
+  }, [savedLayout]);
+
   return {
     layout: editMode ? draft : savedLayout,
     savedLayout,
@@ -158,5 +189,6 @@ export function useClanLayout(): ClanLayoutState {
     setEditMode,
     setDraft,
     done,
+    removeAndSave,
   };
 }

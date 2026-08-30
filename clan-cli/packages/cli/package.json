@@ -13,6 +13,8 @@
   "scripts": {
     "dev": "bun run --watch src/main.tsx",
     "start": "bun run src/cli.ts",
+    "login": "bun run src/cli.ts login",
+    "pair": "bun run src/cli.ts pair",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "bun test src",
     "build": "bun build src/cli.ts --outfile dist/cli.js --target bun --banner \"#!/usr/bin/env bun\" --external @truefoundry/trueforge --external @truefoundry/trueforge-sdk --external @opentui/core --external @opentui/react --external react && bun run scripts/normalize-dist.ts",

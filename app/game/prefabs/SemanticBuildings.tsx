@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { DoubleSide, Group } from "three";
 import { AssetModel } from "@/app/game/scene/AssetModel";
+import { useClanRunViz } from "@/app/game/scene/ClanRunVizContext";
 import { useContinuousRotation } from "./useContinuousRotation";
 
 /** Kenney Castle Kit hexagon module stack heights (world units). */
@@ -11,16 +12,23 @@ const HEX_MID_Y = 0.46;
 const HEX_ROOF_Y = 0.83;
 const BEAM_HEIGHT = HEX_BASE_Y + HEX_MID_Y + HEX_ROOF_Y + 0.08;
 
-function SearchBeam({ reducedMotion = false }: { reducedMotion?: boolean }) {
+function SearchBeam({
+  reducedMotion = false,
+  searching = false,
+}: {
+  reducedMotion?: boolean;
+  searching?: boolean;
+}) {
   const beamRef = useRef<Group>(null);
-  useContinuousRotation(beamRef, reducedMotion, 6, "y");
+  useContinuousRotation(beamRef, reducedMotion, searching ? 3.2 : 6, "y");
+  const intensity = searching ? (reducedMotion ? 7 : 14) : reducedMotion ? 4 : 9;
 
   return (
     <group position={[0, BEAM_HEIGHT, 0]}>
       <group ref={beamRef}>
         <spotLight
           color="#fff4cc"
-          intensity={reducedMotion ? 4 : 9}
+          intensity={intensity}
           distance={18}
           angle={0.28}
           penumbra={0.45}
@@ -32,21 +40,23 @@ function SearchBeam({ reducedMotion = false }: { reducedMotion?: boolean }) {
           <meshStandardMaterial
             color="#ffe9a8"
             emissive="#ffcc66"
-            emissiveIntensity={0.35}
+            emissiveIntensity={searching ? 0.55 : 0.35}
             transparent
-            opacity={0.22}
+            opacity={searching ? 0.32 : 0.22}
             side={DoubleSide}
             depthWrite={false}
           />
         </mesh>
       </group>
-      <pointLight color="#a8d4ff" intensity={3} distance={6} position={[0, 0.2, 0]} />
+      <pointLight color="#a8d4ff" intensity={searching ? 5 : 3} distance={6} position={[0, 0.2, 0]} />
     </group>
   );
 }
 
 /** Castle Kit hexagon lookout with a GSAP rotating search beam (presentation only). */
 export function SearchTower({ reducedMotion = false }: { reducedMotion?: boolean }) {
+  const { snapshot } = useClanRunViz();
+  const searching = snapshot.phase === "planning";
   const midY = HEX_BASE_Y;
   const roofY = HEX_BASE_Y + HEX_MID_Y;
 
@@ -56,32 +66,16 @@ export function SearchTower({ reducedMotion = false }: { reducedMotion?: boolean
       <AssetModel assetKey="castle.towerHexagonMid" position={[0, midY, 0]} />
       <AssetModel assetKey="castle.towerHexagonRoof" position={[0, roofY, 0]} />
       <AssetModel assetKey="castle.flagPennant" position={[0, roofY + HEX_ROOF_Y + 0.15, 0]} scale={0.8} />
-      <SearchBeam reducedMotion={reducedMotion} />
-    </group>
-  );
-}
-
-/** Open timber workshop — Fantasy Town kit, sample-scale (not survival 10×). */
-export function BuilderWorkshop() {
-  return (
-    <group>
-      <AssetModel assetKey="townHall.wallWood" position={[-1, 0, 0]} />
-      <AssetModel assetKey="townHall.wallWood" position={[1, 0, 0]} />
-      <AssetModel assetKey="townHall.wallWoodCorner" position={[-1, 0, -1]} />
-      <AssetModel assetKey="townHall.wallWoodCorner" position={[1, 0, -1]} />
-      <AssetModel assetKey="townHall.wallWood" position={[0, 0, -1]} rotation={[0, Math.PI, 0]} />
-      <AssetModel assetKey="townHall.roofGable" position={[0, 1, 0]} rotation={[0, Math.PI / 2, 0]} scale={0.9} />
-      <AssetModel assetKey="village.planks" position={[0, 0, 0.55]} />
-      <AssetModel assetKey="village.planks" position={[-0.55, 0, 0.2]} rotation={[0, Math.PI / 2, 0]} />
-      <AssetModel assetKey="harbor.barrel" position={[0.65, 0, 0.35]} scale={0.9} />
-      <AssetModel assetKey="harbor.crate" position={[-0.55, 0, 0.45]} scale={0.85} />
-      <AssetModel assetKey="village.lantern" position={[0.9, 0.2, 0.75]} scale={0.85} />
+      <SearchBeam reducedMotion={reducedMotion} searching={searching} />
     </group>
   );
 }
 
 /** Stone forge cottage — Fantasy Town walls + warm forge light. */
 export function ValidationForge() {
+  const { snapshot } = useClanRunViz();
+  const forging = snapshot.phase === "validating" || snapshot.validationStatus === "running";
+
   return (
     <group>
       <AssetModel assetKey="townHall.wallStone" position={[-1, 0, 0]} />
@@ -94,7 +88,12 @@ export function ValidationForge() {
       <AssetModel assetKey="townHall.chimneyBase" position={[0.65, 1.1, -0.55]} />
       <AssetModel assetKey="townHall.chimneyTop" position={[0.65, 1.7, -0.55]} />
       <AssetModel assetKey="harbor.barrel" position={[-0.55, 0, 0.45]} scale={0.85} />
-      <pointLight color="#ff7b36" intensity={8} distance={9} position={[0, 2.4, 0]} />
+      <pointLight
+        color="#ff7b36"
+        intensity={forging ? 16 : 8}
+        distance={forging ? 14 : 9}
+        position={[0, 2.4, 0]}
+      />
     </group>
   );
 }
@@ -125,15 +124,6 @@ export function ModelShrine() {
       <AssetModel assetKey="nature.ring" rotation={[Math.PI / 2, 0, 0]} scale={1.4} />
       <AssetModel assetKey="nature.obelisk" position={[0, 0, 0]} scale={0.55} />
       <pointLight color="#52e6ff" intensity={5} distance={8} position={[0, 2, 0]} />
-    </group>
-  );
-}
-
-export function ApprovalGate() {
-  return (
-    <group>
-      <AssetModel assetKey="harbor.castleGate" />
-      <AssetModel assetKey="village.bannerRed" position={[0, 3.6, 0.4]} scale={1.2} />
     </group>
   );
 }

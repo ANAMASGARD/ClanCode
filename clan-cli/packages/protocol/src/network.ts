@@ -1,8 +1,16 @@
-import type { RunEvent, RunEventType } from "./events.ts";
+import {
+  RUN_EVENT_VERSION,
+  isRunEventType,
+  type RunEvent,
+} from "./events.ts";
 
 export const NETWORK_PROTOCOL_VERSION = 1 as const;
 
-export type CommandType = "task.start" | "task.cancel" | "approval.resolve";
+export type CommandType =
+  | "task.start"
+  | "task.cancel"
+  | "approval.resolve"
+  | "delivery.create_pr";
 
 export type ClientEventType =
   | "device.hello"
@@ -30,7 +38,7 @@ export type ClientEventEnvelope = {
 };
 
 export type TaskStartPayload = {
-  repositoryPath: string;
+  repositoryPath?: string;
   prompt: string;
   mode?: "plan" | "build";
   taskId?: string;
@@ -44,6 +52,11 @@ export type ApprovalResolvePayload = {
   runId: string;
   toolCallId: string;
   allow: boolean;
+};
+
+export type DeliveryCreatePrPayload = {
+  runId: string;
+  title?: string;
 };
 
 export type CommandAckStatus = "accepted" | "rejected" | "duplicate" | "expired";
@@ -68,6 +81,7 @@ export type DeviceHelloPayload = {
   deviceId: string;
   status: "idle" | "busy" | "awaiting_approval";
   activeRunId?: string;
+  repositoryDisplay?: string;
   lastSequence?: number;
   capabilities: string[];
 };
@@ -93,6 +107,15 @@ function parseIso(value: unknown, field: string): string {
   return value;
 }
 
+function isCommandType(value: unknown): value is CommandType {
+  return (
+    value === "task.start" ||
+    value === "task.cancel" ||
+    value === "approval.resolve" ||
+    value === "delivery.create_pr"
+  );
+}
+
 export function parseCommandEnvelope(input: unknown): CommandEnvelope {
   if (!isRecord(input)) {
     throw new Error("Command envelope must be an object");
@@ -101,7 +124,7 @@ export function parseCommandEnvelope(input: unknown): CommandEnvelope {
     throw new Error("Unsupported command version");
   }
   const type = input.type;
-  if (type !== "task.start" && type !== "task.cancel" && type !== "approval.resolve") {
+  if (!isCommandType(type)) {
     throw new Error("Unknown command type");
   }
   if (typeof input.commandId !== "string" || input.commandId.length === 0) {
@@ -153,6 +176,44 @@ export function parseClientEventEnvelope(input: unknown): ClientEventEnvelope {
   };
 }
 
+export function parseRunEvent(input: unknown): RunEvent {
+  if (!isRecord(input)) {
+    throw new Error("RunEvent must be an object");
+  }
+  if (input.version !== RUN_EVENT_VERSION) {
+    throw new Error("Unsupported run event version");
+  }
+  if (typeof input.eventId !== "string" || input.eventId.length === 0) {
+    throw new Error("eventId required");
+  }
+  if (typeof input.sequence !== "number" || !Number.isInteger(input.sequence) || input.sequence < 0) {
+    throw new Error("sequence required");
+  }
+  if (typeof input.runId !== "string" || input.runId.length === 0) {
+    throw new Error("runId required");
+  }
+  if (!isRunEventType(input.type)) {
+    throw new Error("Unknown run event type");
+  }
+  return {
+    version: RUN_EVENT_VERSION,
+    eventId: input.eventId,
+    sequence: input.sequence,
+    runId: input.runId,
+    taskId: typeof input.taskId === "string" ? input.taskId : undefined,
+    timestamp: parseIso(input.timestamp, "timestamp"),
+    type: input.type,
+    payload: input.payload ?? {},
+  };
+}
+
+export function parseRunEventNetworkPayload(input: unknown): RunEvent {
+  if (!isRecord(input)) {
+    throw new Error("Run event payload must be an object");
+  }
+  return parseRunEvent(input.event);
+}
+
 function relativePath(value: unknown): string | undefined {
   if (typeof value !== "string" || value.length === 0) {
     return undefined;
@@ -184,19 +245,57 @@ function repoDisplayName(payload: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
+function boundedStringIds(value: unknown, max = 16): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const ids = value.filter((item): item is string => typeof item === "string" && item.length > 0);
+  return ids.slice(0, max);
+}
+
+function relativePaths(value: unknown, max = 50): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const paths: string[] = [];
+  for (const item of value) {
+    const path = relativePath(item);
+    if (path !== undefined) {
+      paths.push(path);
+    }
+    if (paths.length >= max) {
+      break;
+    }
+  }
+  return paths;
+}
+
+function omitted(event: RunEvent): RunEvent {
+  return { ...event, payload: { omitted: true } };
+}
+
 export function projectRunEventForNetwork(event: RunEvent): RunEvent {
   const payload = isRecord(event.payload) ? event.payload : {};
-  switch (event.type as RunEventType) {
+  switch (event.type) {
     case "run.started":
       return {
         ...event,
         payload: {
           runId: event.runId,
-          mode: payload.mode,
           repositoryDisplay: repoDisplayName(payload),
         },
       };
     case "run.completed":
+      return {
+        ...event,
+        payload: {
+          message: safeString(payload.message),
+          sessionId: undefined,
+          validated: payload.validated === true,
+          validationFailed: payload.validationFailed === true,
+          validationSkipped: payload.validationSkipped === true,
+        },
+      };
     case "run.failed":
     case "run.cancelled":
       return {
@@ -207,31 +306,44 @@ export function projectRunEventForNetwork(event: RunEvent): RunEvent {
         },
       };
     case "tool.requested":
-    case "tool.started":
       return {
         ...event,
         payload: {
-          toolName: payload.toolName ?? payload.name,
-          path: relativePath(payload.path),
+          toolCallId: safeString(payload.toolCallId),
+          toolName: safeString(payload.toolName ?? payload.name),
         },
       };
+    case "tool.started": {
+      const single = safeString(payload.toolCallId);
+      const fromList = boundedStringIds(payload.toolCalls);
+      return {
+        ...event,
+        payload: {
+          toolCallId: single,
+          toolName: safeString(payload.toolName ?? payload.name),
+          toolCallIds: fromList ?? (single !== undefined ? [single] : undefined),
+        },
+      };
+    }
     case "tool.completed":
       return {
         ...event,
         payload: {
-          toolName: payload.toolName ?? payload.name,
-          path: relativePath(payload.path),
-          ok: payload.ok,
+          toolCallId: safeString(payload.toolCallId),
+          toolName: safeString(payload.toolName ?? payload.name),
         },
       };
     case "tool.failed":
       return {
         ...event,
         payload: {
-          toolName: payload.toolName ?? payload.name,
+          toolCallId: safeString(payload.toolCallId),
+          toolName: safeString(payload.toolName ?? payload.name),
           code: safeString(payload.code ?? payload.error),
         },
       };
+    case "validation.started":
+      return { ...event, payload: {} };
     case "validation.completed":
       return {
         ...event,
@@ -273,9 +385,7 @@ export function projectRunEventForNetwork(event: RunEvent): RunEvent {
         ...event,
         payload: {
           stat: safeString(payload.stat, 500),
-          files: Array.isArray(payload.files)
-            ? payload.files.filter((f): f is string => typeof f === "string")
-            : undefined,
+          paths: relativePaths(payload.paths ?? payload.files),
         },
       };
     case "pr.created":
@@ -301,17 +411,18 @@ export function projectRunEventForNetwork(event: RunEvent): RunEvent {
           message: safeString(payload.message, 120),
         },
       };
+    case "task.accepted":
+    case "agent.started":
     case "agent.message":
+    case "session.created":
+    case "turn.started":
     case "model.delta":
     case "model.completed":
-      return {
-        ...event,
-        payload: { omitted: true },
-      };
-    default:
-      return {
-        ...event,
-        payload: { omitted: true },
-      };
+      return omitted(event);
+    default: {
+      const _never: never = event.type;
+      void _never;
+      return omitted(event);
+    }
   }
 }

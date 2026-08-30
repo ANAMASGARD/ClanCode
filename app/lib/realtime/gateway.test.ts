@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { io as ioClient, type Socket as ClientSocket } from "socket.io-client";
 
+import { emptyClanRunSnapshot } from "@/app/lib/clan-run/types";
 import { createRealtimeGateway, type RealtimeGatewayDevice } from "./gateway";
 
 describe("realtime gateway", () => {
@@ -37,6 +38,16 @@ describe("realtime gateway", () => {
       touchDevicePresence: async (input) => {
         presenceUpdates.push(input);
       },
+      relaySecret: "test-relay-secret",
+      ackTimeoutMs: 250,
+      persistAcceptedTask: async (input) => ({
+        ...emptyClanRunSnapshot(),
+        runId: input.runId,
+      }),
+      persistRunEvent: async (input) => ({
+        ...emptyClanRunSnapshot(),
+        runId: input.event.runId,
+      }),
     });
 
     await new Promise<void>((resolve) => {

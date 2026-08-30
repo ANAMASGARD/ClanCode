@@ -180,7 +180,7 @@ Usage:
   clancode run "task"            Headless run (same supervisor)
   clancode run --mode build "t"  Headless Build mode (isolated worktree)
   clancode connect                 Outbound control-plane connection
-  clancode login                   Pair this laptop with the web control plane
+  clancode login                   Pair (or re-pair) this laptop with the web control plane
   clancode pair                    Alias for clancode login
   clancode new [--repo PATH]       Start a fresh TrueForge session
   clancode models                  List TrueForge models

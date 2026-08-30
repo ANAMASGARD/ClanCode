@@ -8,13 +8,14 @@ import { useClanAudio } from "./audio/useClanAudio";
 import { EditModeHud } from "./hud/EditModeHud";
 import { GameHud } from "./hud/GameHud";
 import { useClanLayout } from "./hooks/useClanLayout";
+import { useClanRunProjection } from "./hooks/useClanRunProjection";
 import { ClanScene } from "./scene/ClanScene";
 import {
   buildSemanticBuildingsFromLayout,
   type SemanticBuilding,
   type SemanticBuildingId,
 } from "./state/default-layout";
-import type { ClanPlacement } from "./state/clan-layout";
+import { getPlacementId, type ClanPlacement } from "./state/clan-layout";
 import {
   addPlacement,
   createDecorativePlacement,
@@ -23,13 +24,14 @@ import {
   removePlacement,
 } from "./state/layout-editor";
 import { findShopItem, type PlacableShopItem } from "./state/placable-catalog";
+import { isClanRunBusy } from "@/app/lib/clan-run/types";
 
 export function ClanGame() {
   const [webgl] = useState(() => canUseWebGL());
   const [selected, setSelected] = useState<SemanticBuilding | null>(null);
   const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(null);
   const [resetToken, setResetToken] = useState(0);
-  const [sceneError, setSceneError] = useState<string | null>(null);
+  const [sceneErrorState, setSceneErrorState] = useState<{ key: string; message: string } | null>(null);
   const [shopOpen, setShopOpen] = useState(false);
   const [armedShopId, setArmedShopId] = useState<string | null>(null);
   const [replaceHint, setReplaceHint] = useState(false);
@@ -37,6 +39,8 @@ export function ClanGame() {
   const { muted, interact, toggleMuted } = useClanAudio();
   const reducedMotion = useReducedMotion();
   const layoutState = useClanLayout();
+  const projection = useClanRunProjection();
+  const runBusy = isClanRunBusy(projection);
 
   const lowQuality = useMemo(() => {
     if (typeof navigator === "undefined") return false;
@@ -47,6 +51,13 @@ export function ClanGame() {
     () => buildSemanticBuildingsFromLayout(layoutState.layout),
     [layoutState.layout],
   );
+
+  const sceneFocus = useMemo((): readonly [number, number, number] | null => {
+    if (layoutState.editMode) {
+      return null;
+    }
+    return selected?.position ?? null;
+  }, [layoutState.editMode, selected]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -61,9 +72,10 @@ export function ClanGame() {
           setShopOpen(false);
           setArmedShopId(null);
           setReplaceHint(false);
+        } else {
+          setSelected(null);
+          setSelectedPlacementId(null);
         }
-        setSelected(null);
-        setSelectedPlacementId(null);
       }
     };
     window.addEventListener("keydown", handleKey);
@@ -79,8 +91,32 @@ export function ClanGame() {
   const select = (building: SemanticBuilding) => {
     if (layoutState.editMode) return;
     interact();
+    setSelectedPlacementId(null);
     setSelected(building);
   };
+
+  const selectPlacement = (placementId: string) => {
+    if (layoutState.editMode || runBusy) return;
+    interact();
+    setSelected(null);
+    setSelectedPlacementId(placementId);
+  };
+
+  const handleRemoveSelectedPlacement = useCallback(async (): Promise<boolean> => {
+    if (!selectedPlacementId || runBusy || layoutState.editMode) {
+      return false;
+    }
+    const removed = await layoutState.removeAndSave(selectedPlacementId);
+    if (removed) {
+      setSelectedPlacementId(null);
+      if (!layoutState.editMode) {
+        layoutState.setEditMode(true);
+      }
+      setShopOpen(true);
+      setReplaceHint(true);
+    }
+    return removed;
+  }, [layoutState, runBusy, selectedPlacementId]);
 
   const enterEditMode = () => {
     layoutState.setEditMode(true);
@@ -130,16 +166,30 @@ export function ClanGame() {
     setReplaceHint(false);
   };
 
+  const selectedPlacement = useMemo((): ClanPlacement | null => {
+    if (selectedPlacementId === null) {
+      return null;
+    }
+    return layoutState.layout.find((placement) => getPlacementId(placement) === selectedPlacementId) ?? null;
+  }, [layoutState.layout, selectedPlacementId]);
+
+  const sceneKey = `${projection.runId ?? "idle"}-${String(resetToken)}`;
+  const sceneError = sceneErrorState?.key === sceneKey ? sceneErrorState.message : null;
+
   if (!webgl || sceneError) return <WebGLFallback error={sceneError} buildings={buildings} />;
 
   return (
     <main className={`clan-game-shell${layoutState.editMode ? " is-editing" : ""}${dragging ? " is-dragging" : ""}`}>
-      <SceneErrorBoundary onError={(error) => setSceneError(error.message)}>
+      <SceneErrorBoundary
+        key={sceneKey}
+        onError={(error) => setSceneErrorState({ key: sceneKey, message: error.message })}
+      >
         <Canvas
           shadows="percentage"
           dpr={lowQuality ? 1 : [1, 1.5]}
           gl={{ antialias: !lowQuality, powerPreference: "high-performance", toneMapping: ACESFilmicToneMapping }}
           onCreated={({ gl }) => {
+            gl.setClearColor("#3d8f48");
             gl.outputColorSpace = SRGBColorSpace;
             gl.toneMappingExposure = 1.08;
             gl.shadowMap.type = PCFSoftShadowMap;
@@ -152,13 +202,14 @@ export function ClanGame() {
               selectedId={selected?.id ?? null}
               selectedPlacementId={selectedPlacementId}
               shopArmed={armedShopId !== null}
+              snapshot={projection}
               onSelect={select}
-              onSelectPlacement={setSelectedPlacementId}
+              onSelectPlacement={layoutState.editMode ? setSelectedPlacementId : selectPlacement}
               onMovePlacement={handleMovePlacement}
               onPickTile={handlePickTile}
               onDragChange={setDragging}
               onReset={reset}
-              focus={layoutState.editMode ? null : selected?.position ?? null}
+              focus={sceneFocus}
               resetToken={resetToken}
               lowQuality={lowQuality}
               reducedMotion={reducedMotion}
@@ -173,11 +224,25 @@ export function ClanGame() {
         muted={muted}
         lowQuality={lowQuality}
         editMode={layoutState.editMode}
+        runBusy={runBusy}
+        runView={projection}
+        selectedPlacement={selectedPlacement}
+        onRemovePlacement={() => {
+          void handleRemoveSelectedPlacement();
+        }}
         onHome={reset}
         onAudio={toggleMuted}
         onInteract={interact}
         onSelectBuilding={select}
         onToggleEditMode={enterEditMode}
+        onFocusCastle={() => {
+          interact();
+          const castle = buildings.find((entry) => entry.id === "town-hall");
+          if (castle !== undefined) {
+            select(castle);
+          }
+        }}
+        onCloseCastle={() => setSelected(null)}
       />
       {layoutState.editMode ? (
         <EditModeHud
@@ -258,7 +323,12 @@ class SceneErrorBoundary extends Component<{ children: ReactNode; onError: (erro
     console.error("Clan scene failed", { message: error.message, componentStack: info.componentStack });
     this.props.onError(error);
   }
-  render() { return this.state.failed ? null : this.props.children; }
+  render() {
+    if (this.state.failed) {
+      return null;
+    }
+    return this.props.children;
+  }
 }
 
 export type { SemanticBuildingId };

@@ -3,8 +3,16 @@
 import { UserButton, useUser } from "@clerk/nextjs";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+
+import type { ClanRunView } from "@/app/lib/clan-run/types";
+import { useDevicePresence } from "@/app/game/hooks/useDevicePresence";
+import { ClanCommandChat } from "@/app/game/hud/ClanCommandDock";
+import { harnessPresenceLabel } from "@/app/game/hud/harness-presence-label";
+import { buildingStatusFromProjection } from "@/app/game/state/building-projection";
+import type { ClanPlacement } from "@/app/game/state/clan-layout";
 import type { SemanticBuilding } from "@/app/game/state/default-layout";
+import { findShopItem } from "@/app/game/state/placable-catalog";
 
 type GameHudProps = {
   buildings: readonly SemanticBuilding[];
@@ -12,11 +20,17 @@ type GameHudProps = {
   muted: boolean;
   lowQuality: boolean;
   editMode: boolean;
+  runBusy?: boolean;
+  runView: ClanRunView;
+  selectedPlacement?: ClanPlacement | null;
+  onRemovePlacement?: () => void;
   onHome: () => void;
   onAudio: () => void;
   onInteract: () => void;
   onSelectBuilding: (building: SemanticBuilding) => void;
   onToggleEditMode: () => void;
+  onFocusCastle?: () => void;
+  onCloseCastle?: () => void;
 };
 
 export function GameHud({
@@ -25,18 +39,30 @@ export function GameHud({
   muted,
   lowQuality,
   editMode,
+  runBusy = false,
+  runView,
+  selectedPlacement = null,
+  onRemovePlacement,
   onHome,
   onAudio,
   onInteract,
   onSelectBuilding,
   onToggleEditMode,
+  onFocusCastle,
+  onCloseCastle,
 }: GameHudProps) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [buildingsOpen, setBuildingsOpen] = useState(false);
   const { user, isLoaded } = useUser();
+  const castleSelected = selected?.id === "town-hall";
+  const presence = useDevicePresence(castleSelected);
+  const deviceOnline = presence.online === true;
+  const presenceLabel = harnessPresenceLabel(presence.online, presence.checking);
   const islandLabel = isLoaded
     ? (user?.firstName ?? user?.username ?? user?.fullName ?? "Island")
     : "Island";
+
+  const showCastleChat = castleSelected && !editMode;
 
   return (
     <div className="clan-hud" aria-label="ClanCode game controls">
@@ -46,7 +72,13 @@ export function GameHud({
           <span><strong>ClanCode</strong><small>{islandLabel}</small></span>
         </motion.div>
         <div className="clan-utilities">
-          <DevicePresence />
+          <span
+            className={`clan-presence ${deviceOnline ? "is-online" : ""}`}
+            title="Paired AI harness presence"
+          >
+            <i />
+            {presenceLabel}
+          </span>
           <HudButton label={muted ? "Unmute island" : "Mute island"} onClick={onAudio} icon={muted ? "♪" : "♫"} />
           <HudButton label="Camera home" onClick={() => { onInteract(); onHome(); }} icon="⌂" />
           <HudButton label="Help" onClick={() => { onInteract(); setHelpOpen((open) => !open); }} icon="?" />
@@ -55,7 +87,15 @@ export function GameHud({
       </header>
 
       <nav className="clan-rail" aria-label="Clan navigation">
-        <HudButton label="Clan Castle" onClick={() => { onInteract(); onSelectBuilding(buildings[0]); }} icon="⌂" />
+        <HudButton
+          label="Clan Castle"
+          active={castleSelected}
+          onClick={() => {
+            onInteract();
+            onFocusCastle?.();
+          }}
+          icon="⌂"
+        />
         <button
           type="button"
           className="clan-hud-button"
@@ -75,7 +115,7 @@ export function GameHud({
           type="button"
           className={`clan-hud-button ${editMode ? "clan-hud-button-active" : ""}`}
           aria-label="Edit clan layout"
-          title="Edit layout"
+          title="Edit layout — click buildings to move or remove"
           onClick={() => {
             onInteract();
             onToggleEditMode();
@@ -117,7 +157,39 @@ export function GameHud({
       </AnimatePresence>
 
       <AnimatePresence mode="wait">
-        {selected ? (
+        {showCastleChat ? (
+          <motion.aside
+            key="castle-chat"
+            className="clan-context-panel clan-context-panel-chat"
+            initial={{ opacity: 0, x: 24, scale: 0.97 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 20 }}
+          >
+            <ClanCommandChat
+              view={runView}
+              deviceOnline={deviceOnline}
+              presenceLabel={presenceLabel}
+              editMode={editMode}
+              onClose={() => onCloseCastle?.()}
+              onInteract={onInteract}
+            />
+          </motion.aside>
+        ) : selectedPlacement ? (
+          <motion.aside
+            key={`placement-${selectedPlacement.id}`}
+            className="clan-context-panel"
+            aria-live="polite"
+            initial={{ opacity: 0, x: 24, scale: 0.97 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 20 }}
+          >
+            <PlacementCard
+              placement={selectedPlacement}
+              runBusy={runBusy}
+              onRemove={onRemovePlacement}
+            />
+          </motion.aside>
+        ) : selected ? (
           <motion.aside
             key={selected.id}
             className="clan-context-panel"
@@ -126,15 +198,7 @@ export function GameHud({
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 20 }}
           >
-            <span className="clan-eyebrow">Semantic building</span>
-            <h2>{selected.name}</h2>
-            <p>{selected.purpose}</p>
-            <dl>
-              <div><dt>Status</dt><dd>{selected.status}</dd></div>
-              <div><dt>Assigned agent</dt><dd>None — idle</dd></div>
-              <div><dt>Placement</dt><dd>{selected.movable ? "Movable in PR2" : "Fixed"}</dd></div>
-            </dl>
-            <span className="clan-truth-note">Presentation only — no run is active.</span>
+            <BuildingStatusCard building={selected} runView={runView} deviceOnline={deviceOnline} />
           </motion.aside>
         ) : null}
       </AnimatePresence>
@@ -152,30 +216,101 @@ export function GameHud({
   );
 }
 
-function HudButton({ label, icon, onClick }: { label: string; icon: string; onClick: () => void }) {
-  return <button type="button" className="clan-hud-button" aria-label={label} title={label} onClick={onClick}>{icon}</button>;
+function placementCardLabel(placement: ClanPlacement): string {
+  if (placement.kind === "decorative") {
+    return findShopItem(`prefab-${placement.prefab}`)?.label ?? placement.prefab;
+  }
+  if (placement.kind === "prop") {
+    return findShopItem(`prop-${placement.assetKey}`)?.label ?? placement.assetKey;
+  }
+  return "Building";
 }
 
-function DevicePresence() {
-  const [online, setOnline] = useState<boolean | null>(null);
-  useEffect(() => {
-    let active = true;
-    const refresh = async () => {
-      try {
-        const response = await fetch("/api/devices", { cache: "no-store" });
-        const payload = response.ok ? await response.json() as { devices?: Array<{ online: boolean }> } : null;
-        if (active) setOnline(Boolean(payload?.devices?.some((device) => device.online)));
-      } catch {
-        if (active) setOnline(false);
-      }
-    };
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 10000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, []);
+function PlacementCard({
+  placement,
+  runBusy,
+  onRemove,
+}: {
+  placement: ClanPlacement;
+  runBusy: boolean;
+  onRemove?: () => void;
+}) {
+  if (placement.kind === "semantic") {
+    return null;
+  }
+
+  const label = placementCardLabel(placement);
+
   return (
-    <span className={`clan-presence ${online ? "is-online" : ""}`} title="Paired device presence">
-      <i />{online === null ? "Checking" : online ? "Laptop online" : "Laptop offline"}
-    </span>
+    <>
+      <span className="clan-eyebrow">Island placement</span>
+      <h2>{label}</h2>
+      <p>Tap Remove to clear this spot, then open layout edit (✥) to place something new.</p>
+      <button
+        type="button"
+        className="clan-secondary-action"
+        disabled={runBusy}
+        onClick={() => onRemove?.()}
+      >
+        Remove building
+      </button>
+    </>
+  );
+}
+
+function BuildingStatusCard({
+  building,
+  runView,
+  deviceOnline,
+}: {
+  building: SemanticBuilding;
+  runView: ClanRunView;
+  deviceOnline: boolean;
+}) {
+  const projection = buildingStatusFromProjection(building.id, {
+    ...runView,
+    deviceOnline,
+  });
+
+  return (
+    <>
+      <span className="clan-eyebrow">Semantic building</span>
+      <h2>{building.name}</h2>
+      <p>{building.purpose}</p>
+      <dl>
+        <div><dt>Status</dt><dd>{projection.status}</dd></div>
+        <div><dt>Detail</dt><dd>{projection.detail}</dd></div>
+        <div><dt>Placement</dt><dd>{building.movable ? "Movable in edit mode" : "Fixed"}</dd></div>
+      </dl>
+      {building.id === "builder-workshop" && runView.storeys > 1 ? (
+        <p className="clan-chat-note">
+          Workshop floors ({String(runView.storeys)}) grow after validated builds. Use ✥ layout edit to move island decorations.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+function HudButton({
+  label,
+  icon,
+  onClick,
+  active = false,
+}: {
+  label: string;
+  icon: string;
+  onClick: () => void;
+  active?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className={`clan-hud-button ${active ? "clan-hud-button-active" : ""}`}
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+    >
+      {icon}
+    </button>
   );
 }

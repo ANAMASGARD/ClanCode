@@ -22,7 +22,7 @@ describe("game asset catalog", () => {
 
   test("curates a broad but bounded asset set", () => {
     expect(CATALOG_ENTRIES.length).toBeGreaterThanOrEqual(170);
-    expect(CATALOG_ENTRIES.length).toBeLessThanOrEqual(360);
+    expect(CATALOG_ENTRIES.length).toBeLessThanOrEqual(380);
   });
 
   test("includes round canopy trees and shoreline rocks", () => {

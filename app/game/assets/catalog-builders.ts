@@ -258,6 +258,22 @@ export function survivalProp(key: string, model: string, district: GameAssetDist
  * Blocky villager characters. Source models are 2.7 units tall with their
  * origin at the feet; 0.5 puts them at readable village scale.
  */
+export function modularBuilding(
+  key: string,
+  model: string,
+  district: GameAssetDistrict = "workshop",
+  role: GameAssetRole = "building",
+) {
+  return defineAsset(key, {
+    kit: "modularBuildings",
+    model,
+    role,
+    district,
+    ...MODULAR,
+    uniformScale: 0.55,
+  });
+}
+
 export function blockyCharacter(key: string, model: string) {
   return defineAsset(key, {
     kit: "blockyCharacters",
