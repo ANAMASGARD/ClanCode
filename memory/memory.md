@@ -114,9 +114,7 @@ Judge-ready docs at repo root and `docs/`:
 
 Demo video: https://youtu.be/istUU5onLCI
 
-`@clancode/cli@0.1.0-beta.2` **staged** on npm (dist-tag **`next`**, org **`@clancode`**). Approve at [Staged Packages](https://www.npmjs.com/settings/anamasgard/staged-packages) (2FA). After approval: [package page](https://www.npmjs.com/package/@clancode/cli), org packages at [clancode settings](https://www.npmjs.com/settings/clancode/packages). Install: `npm install -g @clancode/cli@next`.
-
-> **Note:** Personal [anamasgard/packages](https://www.npmjs.com/settings/anamasgard/packages) stays empty — scoped org packages live under the **clancode** organization, not your user account.
+`@clancode/cli@0.1.0-beta.2` **published** on npm ([package page](https://www.npmjs.com/package/@clancode/cli), dist-tag **`next`**, org **`@clancode`**). Install: `npm install -g @clancode/cli@next`. Demo: [youtu.be/istUU5onLCI](https://youtu.be/istUU5onLCI).
 
 ### Validation (2026-08-30)
 
@@ -272,7 +270,7 @@ Production Socket.IO host is **decision later** (local Bun `:3001` for developme
 
 1. **Task composer → `task.start` → RunEvents in browser → approval UI → PR result**
 2. Neon domain tables (repositories, tasks, runs, run_events, approvals)
-3. ~~npm registry publish~~ — **staged** `@clancode/cli@0.1.0-beta.2` on `@next`; awaiting Staged Packages approval (2026-08-31)
+3. ~~npm registry publish~~ — **done** (`@clancode/cli@0.1.0-beta.2` on `@next`, 2026-08-31)
 
 ---
 
