@@ -1,6 +1,6 @@
 # ClanCode — Project Memory
 
-**Last updated:** 2026-08-30 (run harness: restart, session logs, PR links, construction viz)
+**Last updated:** 2026-08-30 (video landing hero, Qodo harness fixes, session logs, construction viz)
 
 ## What This Repo Is
 
@@ -35,6 +35,7 @@ Island builders, Approval Gate, PR Courier, and Builder Workshop construction si
 | Stale-run detection (`planning` + `task.start` + `lastSequence === 0`) with user hint | ✅ |
 | Clickable PR links in web activity panel | ✅ |
 | **Delete building** — click island decoration or optional semantic building → red Delete in side panel | ✅ |
+| **Re-add building** — removed items appear in bottom-left tray; restore at original tile | ✅ |
 | **Session history popup** — ◫ rail or Session Lodge → archived runs + chat/activity lines | ✅ |
 | Construction site at workshop (3D scaffolding, no DOM overlay) | ✅ |
 | Workshop +1 storey only for unique successful **Build** with `changed` and validation passed/skipped (cap 4) | ✅ |
@@ -52,6 +53,28 @@ API: `POST /api/clan/run/reset` — tries cancel, archives activity payload, cal
 API: `GET /api/clan/session-logs` — lists archived sessions for the signed-in user (newest first).
 
 Protected semantic buildings (cannot delete): Clan Castle, Approval Gate, Builder Workshop, Validation Forge, Test Camp.
+
+### Qodo PR #23 harness fixes (2026-08-30)
+
+| Finding | Fix |
+|---------|-----|
+| Control commands reset projection | `onAccepted` / `seedAcceptedTask` only on `task.start` |
+| Run events out-of-order | Per-`clerkUserId` `enqueueRunEvent()` chain in gateway |
+| Secondary device replaces active run | `applyRunEvent` ignores non-selected `deviceId` |
+| Relay outages → HTTP 500 | `relayClanCommand` maps network failure to `503 relay_unavailable` |
+| Reset masks relay rejection | Reset route fails closed unless `device_offline` |
+| Archive failures silent | CLI logs stderr + user-visible message on archive failure |
+| Failure timeline wrong stage | `terminalTimeline()` / `inferTerminalStep()` in `run-timeline.ts` |
+
+### Landing page (public `/`)
+
+GramSarthi-inspired full-viewport hero using `public/video/Clan-Code-Hero.mp4`:
+
+- **Video background** — autoplay muted loop; light top/bottom vignette only (no heavy grey wash); title high, copy/CTA low so the island stays visible in the centre.
+- **Copy** — Clash Display headline “Build Your Code Kingdom”, feature pills, glass **Begin Journey** / **Enter Dashboard** CTA.
+- **Auth** — header Sign in / Sign up (or Dashboard + UserButton when signed in); CTA opens Clerk modal; `?auth=1` still supported.
+- **Audio** — click anywhere on the hero to unmute (browser autoplay policy); hint badge until enabled.
+- **Component** — `app/components/landing-hero.tsx`; styles in `app/globals.css` (`.landing-*`).
 
 ### CLI transcript improvements
 
@@ -108,7 +131,7 @@ Local AI harness is feature-complete for hackathon scope. **Stop adding general 
 | Flow | Status |
 |------|--------|
 | Clerk user auth (linked app `app_3IXcn0Ap17Yw14c5AcYZYb5mws8`) | ✅ |
-| Landing Sign in / Sign up / UserButton | ✅ |
+| **Video landing hero** at `/` with Clerk sign-in and dashboard CTA | ✅ |
 | `clancode login` / `clancode pair` | ✅ (also runs automatically on first `clancode` / `dev:clan` launch) |
 | Browser `/pair?code=XXXX` approve / deny | ✅ |
 | One-time AES-GCM device token delivery | ✅ |
@@ -384,7 +407,7 @@ These notes are history, not current layout:
 | Presentation | ClanCode HUD, real device-presence polling, disabled future task dock, accessible audio toggle, reduced-motion handling, and adaptive quality |
 | Asset boundary | `kenneyGlbUrl()` plus a typed 92-entry catalog; cached GLBs are cloned before pivot/shadow normalization |
 | Tooling | Asset existence verifier, model-bounds inspector, GLB URL tests, and deterministic forest tests |
-| Font guardrail | Unlicensed `Clash_*` files remain unwired; the HUD uses system fallback fonts until redistribution rights are verified |
+| Font guardrail | Clash Display wired on landing hero via `public/fonts/`; game HUD may still use system fallback where unlicensed redistribution is unresolved |
 
 ### Foundation fixes discovered during live browser verification
 

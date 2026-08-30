@@ -1,5 +1,4 @@
-import { DashboardEntry } from "./components/dashboard-entry";
-import { SiteHeader } from "./components/site-header";
+import { LandingHero } from "./components/landing-hero";
 
 export default async function Home({ searchParams }: PageProps<"/">) {
   const params = await searchParams;
@@ -8,11 +7,8 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     authParam === "1" || (Array.isArray(authParam) && authParam.includes("1"));
 
   return (
-    <>
-      <SiteHeader />
-      <main className="flex min-h-[calc(100%-4rem)] flex-1 items-center justify-center">
-        <DashboardEntry initialAuthOpen={initialAuthOpen} />
-      </main>
-    </>
+    <main className="landing-page">
+      <LandingHero initialAuthOpen={initialAuthOpen} />
+    </main>
   );
 }
