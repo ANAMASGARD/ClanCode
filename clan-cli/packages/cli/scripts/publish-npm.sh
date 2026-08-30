@@ -26,4 +26,15 @@ printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$NPMRC"
 
 cd "$PKG_DIR"
 bun run build
-npm publish --access public --tag next --userconfig "$NPMRC"
+
+# npm now requires 2FA proof-of-presence to finalize public publishes.
+# Stage with the token, then approve in npm UI (Staged Packages) or via OTP.
+npm stage publish --access public --tag next --userconfig "$NPMRC"
+
+echo ""
+echo "Staged. Finish publish on npm:"
+echo "  1. https://www.npmjs.com/settings/anamasgard/staged-packages"
+echo "  2. Approve @clancode/cli (requires authenticator OTP)"
+echo "  3. Package appears under org: https://www.npmjs.com/settings/clancode/packages"
+echo ""
+npm stage list @clancode/cli --userconfig "$NPMRC"

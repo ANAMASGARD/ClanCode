@@ -1,6 +1,6 @@
 {
   "name": "@clancode/cli",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "Local-first TrueForge-supervised AI coding harness — pair with the ClanCode web control plane, run agents in isolated Git worktrees, enforce approvals, validate, and open PRs from your machine.",
   "type": "module",
   "license": "AGPL-3.0-or-later",
