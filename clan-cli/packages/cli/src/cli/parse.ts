@@ -10,7 +10,7 @@ import { ensureRuntime } from "../trueforge/runtime.ts";
 import { assertNodeRuntime } from "../trueforge/config.ts";
 import { listAvailableModels, selectModel } from "../models/resolve.ts";
 
-const VERSION = "0.1.0-beta.1";
+const VERSION = "0.1.0-beta.2";
 
 export async function runCli(argv: readonly string[]): Promise<number> {
   const args = argv.slice(2);

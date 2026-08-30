@@ -1,69 +1,145 @@
-# ClanCode
+<p align="center">
+  <strong>ClanCode</strong><br/>
+  <em>Turn AI coding into a living clan.</em>
+</p>
 
-Local-first AI coding harness. The Next.js web app is the **control plane**. The `clancode` CLI is the **execution plane**. [TrueForge](https://trueforge.dev) is the **runtime agent harness** that actually runs tools, worktrees, approvals, and validation. The clan island visualizes real `RunEvent`s — it does not authorize tools, grant approvals, or invent Git/PR results.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@clancode/cli">
+    <img src="https://img.shields.io/npm/v/@clancode/cli?style=for-the-badge&logo=npm&logoColor=white&labelColor=CB3837&color=281637" alt="@clancode/cli on npm" />
+  </a>
+  &nbsp;
+  <a href="https://www.npmjs.com/package/@clancode/cli">
+    <img src="https://img.shields.io/badge/Install-@clancode%2Fcli@next-CB3837?style=for-the-badge&logo=npm&logoColor=white" alt="npm install @clancode/cli@next" />
+  </a>
+  &nbsp;
+  <a href="https://youtu.be/istUU5onLCI">
+    <img src="https://img.shields.io/badge/Watch-Demo-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="YouTube demo" />
+  </a>
+</p>
 
-## Setup
+<p align="center">
+  <a href="https://www.npmjs.com/package/@clancode/cli">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/d/db/Npm-logo.svg" alt="npm" width="72" />
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://www.npmjs.com/package/@clancode/cli"><strong>@clancode/cli</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://youtu.be/istUU5onLCI"><strong>Demo video</strong></a>
+</p>
 
-Copy [`.env.example`](.env.example) to `.env.local` and fill Clerk, Neon `DATABASE_URL`, `PAIRING_DELIVERY_KEY`, and:
+<p align="center">
+  <a href="https://youtu.be/istUU5onLCI">
+    <img src="https://img.youtube.com/vi/istUU5onLCI/hqdefault.jpg" alt="ClanCode demo — task from Clan Castle to PR delivery" width="640" />
+  </a>
+  <br/>
+  <sub>▶ Click to watch: Clan Castle → TrueForge on your laptop → Approval Gate → validation → PR</sub>
+</p>
+
+---
+
+Local-first AI coding harness: a **Next.js control plane** pairs with the **`clancode` CLI** on your machine. **[TrueForge](https://trueforge.dev)** runs agents locally; the clan **village visualizes real `RunEvent`s** — it never grants permissions or invents Git results.
+
+## Install CLI
+
+> **[Bun](https://bun.sh) ≥ 1.4**, **Node ≥ 22.14**, **Git**, and a **TrueForge** model. `npm install -g` does not install Bun.
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@clancode/cli">
+    <img src="https://img.shields.io/npm/v/@clancode/cli?logo=npm&logoColor=white&label=npm%20package" alt="npm version" />
+  </a>
+</p>
 
 ```bash
-CLANCODE_REALTIME_INTERNAL_URL=http://127.0.0.1:3001
-CLANCODE_REALTIME_RELAY_SECRET=<long random string>
+npm install -g @clancode/cli@next
+# or: bun add -g @clancode/cli@next
+
+clancode doctor
+clancode login      # pair once with the web app
+clancode            # from your target Git repo (or --repo PATH)
 ```
 
-Apply migrations (including `clan_run_projections`) with `bun run db:migrate`. Install both package roots:
+Package: **[npmjs.com/package/@clancode/cli](https://www.npmjs.com/package/@clancode/cli)** · Source install: [docs/local-cli-from-source.md](docs/local-cli-from-source.md)
+
+## Quick start (full stack)
 
 ```bash
-bun install
-cd clan-cli && bun install
+git clone https://github.com/ANAMASGARD/ClanCode.git && cd ClanCode
+bun install && cd clan-cli && bun install && cd ..
+cp .env.example .env.local   # Clerk, Neon, PAIRING_DELIVERY_KEY, CLANCODE_REALTIME_RELAY_SECRET
+bun run db:migrate
 ```
 
-## Run (three terminals)
+| # | Terminal | URL |
+|---|----------|-----|
+| 1 | `bun run dev` | http://localhost:3000 |
+| 2 | `bun run realtime` | http://localhost:3001 |
+| 3 | `clancode` or `cd clan-cli && bun run dev:clan -- --repo ..` | — |
+
+Sign in → `/dashboard` → **Clan Castle** → Plan or Build. Approve risky actions at the **Approval Gate**. Safe demo script: [docs/demo.md](docs/demo.md).
+
+## How it works
+
+```text
+Web (Clerk + village) → gateway :3001 → clancode CLI → TrueForge → worktree → RunEvents → Neon → island UI
+```
+
+| Layer | Role |
+|-------|------|
+| **Web** | Auth, pairing, task intent, approvals UI, visualization |
+| **CLI** | Filesystem, Git, worktrees, policy, TrueForge supervision |
+| **TrueForge** | Runtime agent loop (not a hidden second harness) |
+
+**Local-first:** repo files stay on your machine; risky tools need human approval; delivery via **PR**, not direct merge to default branch.
+
+## Village = execution dashboard
+
+| Building | Engineering state |
+|----------|-------------------|
+| Clan Castle | Task dispatch |
+| Search Tower | Read / grep / explore |
+| Builder Workshop | Code changes |
+| Approval Gate | Human checkpoint |
+| Validation Forge | Tests / typecheck |
+| PR Harbor | Real `pr.created` only |
+
+## Docs
+
+| | |
+|---|---|
+| [docs/quickstart.md](docs/quickstart.md) | Clone → running in ~15 min |
+| [docs/demo.md](docs/demo.md) | Two-run approval demo |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Common failures |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Trust boundaries |
+| [AGENTS.md](AGENTS.md) | Rules for AI assistants developing ClanCode |
+| [memory/memory.md](memory/memory.md) | Current implementation status |
+
+## Validation
 
 ```bash
-# Terminal 1 — web control plane
-bun run dev
-
-# Terminal 2 — realtime gateway (loopback only)
-bun run realtime
-
-# Terminal 3 — CLI inside a safe Git repo (this one is fine for the demo file)
-cd clan-cli && bun run dev:clan
+bun run test:pairing && bun run test:game
+cd clan-cli && bun test && bun run typecheck
 ```
 
-Pair the laptop once in the browser (`clancode login` or `cd clan-cli && bun run login`). After that, the CLI auto-connects. If the website shows **Laptop offline** or **No devices**, you likely approved pairing under a different Clerk account — run **`bun run login`** again while signed in as the account you use on the site.
+## Qodo review evidence
 
-Optional voice: set server-only `OPENAI_API_KEY` in `.env.local` to enable push-to-talk in the Castle chat (transcripts append to the textarea; they never auto-send).
+| PR | Scope |
+|----|-------|
+| [#19](https://github.com/ANAMASGARD/ClanCode/pull/19) | Device pairing — fail-closed API, gateway fixes |
+| [#18](https://github.com/ANAMASGARD/ClanCode/pull/18) | CLI harness — TrueForge supervisor, `@clancode/cli` |
+| [#23](https://github.com/ANAMASGARD/ClanCode/pull/23) | Run harness + island UI — relay, ordered events, projection |
 
-## Architecture / TrueForge
+## License & assets
 
-Browser Clerk HTTP → Next.js `/api/clan/*` → secret `POST http://127.0.0.1:3001/internal/command` → one Socket.IO socket → paired CLI → TrueForge `RunSupervisor` → sanitized `run.event` → Neon `clan_run_projections` (gateway is the only writer) → poll `GET /api/clan/run` → island + HUD.
+CLI: **AGPL-3.0-or-later** ([LICENSE](clan-cli/packages/cli/LICENSE)). Kenney kits: CC0 under `public/assets/`. Monorepo: no repo-wide LICENSE yet.
 
-TrueForge owns tool execution, sandbox/worktree, approval pauses, and validation. The game projects that state: Search Tower for reads, builders + workshop floors for real diffs after validation, Approval Gate for `approval.required` / `granted` / `denied`, PR Courier only after a human **Create Pull Request** and a real `pr.created` event.
+---
 
-## Two-run demo
+<p align="center">
+  <a href="https://www.npmjs.com/package/@clancode/cli"><img src="https://img.shields.io/npm/v/@clancode/cli?style=flat-square&logo=npm&logoColor=white&color=CB3837" alt="npm" /></a>
+  &nbsp;
+  <a href="https://youtu.be/istUU5onLCI"><img src="https://img.shields.io/badge/YouTube-Demo-red?style=flat-square&logo=youtube" alt="YouTube" /></a>
+  &nbsp;
+  <a href="https://github.com/ANAMASGARD/ClanCode"><img src="https://img.shields.io/badge/GitHub-ClanCode-181717?style=flat-square&logo=github" alt="GitHub" /></a>
+</p>
 
-Tracked disposable file: [`demo-obsolete.txt`](demo-obsolete.txt).
-
-1. **Run A (deny):** Dispatch a Build task that would delete or rewrite `demo-obsolete.txt`. When the Approval Gate closes, **Deny**. The file remains. The snapshot stays `awaiting_approval` + denied. Do not approve that same tool call.
-2. **Run B (approve + PR):** Start a **new** task. Approve when asked. Cancel still works instead of approve if you click it. After validation passes, the workshop gains one floor (cap 4) and the dock shows **Ready for delivery**. Confirm **Create Pull Request** — that commits the worktree, pushes the task branch, and opens a GitHub PR. The courier ship sails only when `pr.created` arrives with a real URL.
-
-Failed validation, cancel, and Plan mode never grow the workshop and never enable delivery.
-
-## Demo video
-
-Placeholder until recorded: _add the public video URL here_.
-
-## AI coding assistant disclosure
-
-This repository was implemented with AI coding assistants (Cursor / Claude) under human direction. Architecture invariants in `ARCHITECTURE.md` and `AGENTS.md` were treated as non-negotiable. Humans own pairing, approvals, pull-request merge, and production secrets.
-
-## Qodo Code Review Evidence
-
-Representative merged review: [PR #19 — Clerk device pairing](https://github.com/ANAMASGARD/ClanCode/pull/19).
-
-Qodo surfaced mixing of token/device/URL credentials, untested gateway auth/presence paths, raw API error leakage, pairing approval/expiry races, and `slow_down` ignored during device login. Those were fixed in [`f6eba20`](https://github.com/ANAMASGARD/ClanCode/commit/f6eba20) (`resolveRealtimeCredentials`, `runDetached` gateway handlers, request-id `internal_error` responses, expiry predicates on approve/deny, exponential backoff). Follow-up review against the merged pairing slice is recorded in `memory/memory.md`. This run-visualization change is intended to go through the same `/agentic_review` gate before human merge.
-
-## License
-
-Private / unpublished unless otherwise noted. Kenney 3D kits remain under their own licenses in `public/assets/`.
+<p align="center"><sub>Built with AI coding assistants under human direction. Runtime agents follow TrueForge + ClanCode policy.</sub></p>

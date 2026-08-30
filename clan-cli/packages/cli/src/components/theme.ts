@@ -31,7 +31,7 @@ export const theme = {
   waterDeep: "#0277BD",
 } as const;
 
-export const PACKAGE_VERSION = "0.1.0-beta.1";
+export const PACKAGE_VERSION = "0.1.0-beta.2";
 
 export type AsciiFontChoice = "block" | "tiny";
 
