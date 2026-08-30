@@ -40,7 +40,7 @@ function cloneSceneWithMaterials(source: Group): Group {
 
 function applyPivot(
   clone: Group,
-  pivotMode: "preserve-origin" | "ground-center" | "custom",
+  pivotMode: "preserve-origin" | "ground-origin" | "ground-center" | "custom",
   pivotOffset: readonly [number, number, number],
 ): Group {
   if (pivotMode === "preserve-origin") {
@@ -50,6 +50,14 @@ function applyPivot(
 
   const bounds = new Box3().setFromObject(clone);
   const center = bounds.getCenter(new Vector3());
+  if (pivotMode === "ground-origin") {
+    clone.position.set(
+      pivotOffset[0],
+      -bounds.min.y + pivotOffset[1],
+      pivotOffset[2],
+    );
+    return clone;
+  }
   if (pivotMode === "ground-center") {
     clone.position.set(
       -center.x + pivotOffset[0],

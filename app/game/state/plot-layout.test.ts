@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { GAME_ASSETS } from "@/app/game/assets/catalog";
-import { DECORATIVE_PLACEMENTS } from "@/app/game/state/decorative-layout";
+import { DEFAULT_SEED_LAYOUT, MAX_LAYOUT_PLACEMENTS } from "@/app/game/state/clan-layout";
+import { validateLayout } from "@/app/game/state/layout-editor";
 import {
   BEACH_GATE_HALF_X,
   BEACH_WALL_Z,
@@ -67,9 +68,15 @@ describe("village building layout", () => {
     }
   });
 
+  test("default seed validates for the editor", () => {
+    expect(validateLayout(DEFAULT_SEED_LAYOUT).valid).toBe(true);
+    expect(DEFAULT_SEED_LAYOUT.length).toBeLessThanOrEqual(MAX_LAYOUT_PLACEMENTS);
+  });
+
   test("keeps decorative accents light and inside the plot", () => {
-    expect(DECORATIVE_PLACEMENTS.length).toBeLessThanOrEqual(16);
-    for (const placement of DECORATIVE_PLACEMENTS) {
+    const decorative = DEFAULT_SEED_LAYOUT.filter((p) => p.kind === "decorative");
+    expect(decorative.length).toBeLessThanOrEqual(22);
+    for (const placement of decorative) {
       const [x, z] = tileWorld(placement.tileX, placement.tileZ);
       expect(isInsidePlot(x, z)).toBe(true);
       expect(isOffSand(z)).toBe(true);
@@ -77,10 +84,7 @@ describe("village building layout", () => {
   });
 
   test("no two buildings share a lattice slot", () => {
-    const slots = [
-      ...SEMANTIC_PLACEMENTS.map((placement) => `${placement.tileX}:${placement.tileZ}`),
-      ...DECORATIVE_PLACEMENTS.map((placement) => `${placement.tileX}:${placement.tileZ}`),
-    ];
+    const slots = DEFAULT_SEED_LAYOUT.map((placement) => `${placement.tileX}:${placement.tileZ}`);
     expect(new Set(slots).size).toBe(slots.length);
   });
 

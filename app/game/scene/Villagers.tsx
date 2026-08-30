@@ -11,10 +11,11 @@ import {
 } from "@/app/game/assets/catalog";
 import { GROUND_Y } from "@/app/game/state/tile";
 import { mulberry32 } from "@/app/game/state/seeded-random";
+import type { ClanPlacement } from "@/app/game/state/clan-layout";
 import {
   createVillagers,
-  isWalkable,
-  pickWanderTarget,
+  isWalkableOnLayout,
+  pickWanderTargetOnLayout,
   VILLAGER_COUNT,
   VILLAGER_MODEL_KEYS,
   VILLAGER_SEED,
@@ -27,13 +28,22 @@ const PAUSE_CHANCE = 0.35;
 const PAUSE_SECONDS = 2.4;
 
 /** Kenney blocky villagers wandering the clan at random. Presentation only. */
-export function Villagers({ reducedMotion }: { reducedMotion: boolean }) {
-  const villagers = useMemo(() => createVillagers(VILLAGER_SEED, VILLAGER_COUNT), []);
+export function Villagers({
+  layout,
+  reducedMotion,
+}: {
+  layout: readonly ClanPlacement[];
+  reducedMotion: boolean;
+}) {
+  const villagers = useMemo(
+    () => createVillagers(layout, VILLAGER_SEED, VILLAGER_COUNT),
+    [layout],
+  );
 
   return (
     <group>
       {villagers.map((villager) => (
-        <Villager key={villager.id} villager={villager} reducedMotion={reducedMotion} />
+        <Villager key={villager.id} layout={layout} villager={villager} reducedMotion={reducedMotion} />
       ))}
     </group>
   );
@@ -50,9 +60,11 @@ type WanderState = {
 };
 
 function Villager({
+  layout,
   villager,
   reducedMotion,
 }: {
+  layout: readonly ClanPlacement[];
   villager: VillagerSeed;
   reducedMotion: boolean;
 }) {
@@ -97,10 +109,10 @@ function Villager({
 
   useEffect(() => {
     const current = state.current;
-    const target = pickWanderTarget(current.random, current.x, current.z);
+    const target = pickWanderTargetOnLayout(layout, current.random, current.x, current.z);
     current.targetX = target.x;
     current.targetZ = target.z;
-  }, []);
+  }, [layout]);
 
   useFrame((_, delta) => {
     const node = group.current;
@@ -120,7 +132,7 @@ function Villager({
     const distance = Math.hypot(dx, dz);
 
     if (distance < ARRIVE_RADIUS) {
-      const target = pickWanderTarget(current.random, current.x, current.z);
+      const target = pickWanderTargetOnLayout(layout, current.random, current.x, current.z);
       current.targetX = target.x;
       current.targetZ = target.z;
       if (current.random() < PAUSE_CHANCE) {
@@ -134,8 +146,8 @@ function Villager({
     const nextZ = current.z + (dz / distance) * travel;
 
     // Steer away instead of walking through a building.
-    if (!isWalkable(nextX, nextZ)) {
-      const target = pickWanderTarget(current.random, current.x, current.z);
+    if (!isWalkableOnLayout(layout, nextX, nextZ)) {
+      const target = pickWanderTargetOnLayout(layout, current.random, current.x, current.z);
       current.targetX = target.x;
       current.targetZ = target.z;
       return;

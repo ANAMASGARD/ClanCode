@@ -4,3 +4,4 @@
  */
 
 export * from "./devices";
+export * from "./clan-layouts";

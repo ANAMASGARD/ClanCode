@@ -20,7 +20,7 @@ validation, branch, or pull-request state.
 
 ## Kenney kits
 
-All four packs include a `License.txt` identifying the content as Creative
+All Kenney packs include a `License.txt` identifying the content as Creative
 Commons Zero (CC0). The licenses allow personal, educational, and commercial
 use. Crediting Kenney or `www.kenney.nl` is encouraged but not required.
 
@@ -30,6 +30,8 @@ use. Crediting Kenney or `www.kenney.nl` is encouraged but not required.
 | Nature Kit 2.1 | `public/assets/kenney_nature-kit/` | 329 GLBs in `Models/GLTF format/`; 121 selected by the game catalog | Island terrain and dressing: flat plot layers, river tiles, cliffs, round-tree canopy, shoreline rocks/stones, waterfalls, paths, and plants. Environment only — not product state. |
 | Pirate Kit 2.1 | `public/assets/kenney_pirate-kit/` | 72 GLBs in `Models/GLB format/`; 37 selected by the game catalog | Coastal props retained in catalog for future harbor/build passes; not rendered in the current empty-plot scene. |
 | Survival Kit 2.0 | `public/assets/kenney_survival-kit/` | 80 GLBs in `Models/GLB format/`; 26 selected by the game catalog | Work-site props: tents, workbenches, tools, campfires, resources, fences, and storage. These may visualize active task or agent work, but animations remain decorative. |
+| Castle Kit | `public/assets/kenney_castle-kit/` | 76 GLBs in `Models/GLB format/`; 44 selected by the game catalog | Town Hall is assembled from the kit sample: curtains, gatehouse half-towers, square keeps, inner gabled keep, siege, and pines. |
+| Retro Fantasy Kit | `public/assets/kenney_retro-fantasy-kit (1)/` | 105 GLBs in `Models/GLB format/`; keep towers, teal roofs, and timber props selected | Lived-in stone/timber keep accents. Do not use this kit to ring the plot with curtain walls. |
 | Blocky Characters 2.0 | `public/assets/kenney_blocky-characters_20/` | 18 GLBs in `Models/GLB format/`; all 18 selected by the game catalog | Village inhabitants. Each model ships `static`, `idle`, `walk`, `sprint`, and further clips as node-transform animations (no skins). Characters are ambience only; they never encode run, approval, or agent state. |
 
 ### Common kit layout

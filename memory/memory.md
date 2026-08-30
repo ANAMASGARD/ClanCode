@@ -1,6 +1,6 @@
 # ClanCode — Project Memory
 
-**Last updated:** 2026-08-30 (Clash-style plot scene clone — scene only)
+**Last updated:** 2026-08-30 (Castle Kit Sample.png keep, standing windmills, layout editor)
 
 ## What This Repo Is
 
@@ -169,39 +169,82 @@ Production Socket.IO host is **decision later** (local Bun `:3001` for developme
 
 **Branch:** `feat/clancode-game-foundation` (in progress on scene layer)
 
-Clash-style plot island with Kenney stand-in village on the gridded grass:
+Clash-style plot island with a Kenney village on the gridded grass. The game remains presentation-only: it does not authorize tools, grant approvals, or invent run/PR state.
+
+### Current island (2026-08-30)
 
 - **Terrain** — flat stacked axis-aligned squares (`app/game/scene/terrain/`): dark forest floor clipped at `WATER_EDGE_Z`, medium-green rim, dirt edge, procedural gridded plot shader, clean orange sand band, Kenney blue sea.
 - **Sea** — instanced `ground_riverOpen` tiles tinted toward reference blue over a deeper backing plane.
 - **Shore** — flat sand + foam strip only.
-- **Canopy** — dense instanced Fantasy Town Kit pines (`village.tree*`) mixed with Nature pines, plus Fantasy kit rocks (`village.rock*`), fully covering green plains and outer forest. **No trees on the clan plot.** Beach/shore wedge stays open.
-- **Village** — `Village.tsx` mounted on the plot in `ClanScene.tsx`. **No interior walls.** 12 semantic buildings plus 12 light decorative accents. Town Hall, houses, windmill, and watermill restyled from Fantasy Town Kit modular pieces to match Sample.png. Workshop/forge/pirate towers unchanged.
-- **Beach rampart** — the only wall. `walls.ts` generates a single instanced `harbor.castleWall` line on the green rim at `BEACH_WALL_Z = 26`, with a centre gate opening (`BEACH_GATE_HALF_X`), flanking small towers, and `harbor.towerWatch` at both ends. The Approval Gate building stands in the opening.
-- **Harbor** — `Harbor.tsx` + `shore-layout.ts`: wooden pier from the sand into the sea, three bobbing Kenney ships plus a rowboat beyond `WATER_EDGE_Z`, crates/barrels/palms on the sand, and a shore lookout ("review post") tower inside the rampart. Bobbing is disabled under reduced motion.
-- **Villagers** — `Villagers.tsx` + `villager-wander.ts`: 10 Kenney **Blocky Characters** (5th kit, CC0) roaming the plot at random. Each picks a random walkable target (3–10 unit hops), steers away from buildings instead of clipping them, and occasionally pauses. `walk`/`idle` GLB animation clips are blended imperatively via `setEffectiveWeight`; position/heading mutate refs in `useFrame`, so no per-frame React state. `isWalkable()` derives blockers from the semantic + decorative placements, so thinning buildings automatically opens more ground.
-- **Roads** — Town Hall plaza plus a main avenue from the plaza to the beach gate (`roads.ts`, road GLBs scaled to one tile).
-- **Stone outcrops** — four light-gray `stone_*` props at top-right.
-- **Shared constants** — `app/game/state/island.ts` drives terrain, canopy, water, camera lock, beach-wall geometry, and plot-bounds tests. `seeded-random.ts` holds the shared `mulberry32` PRNG used by the canopy and villager spawns.
-- **Catalog** — **280** verified GLBs across five kits (Fantasy Town 77 after arch/curved/roof-point + instanceable forest pines/rocks); villager models preloaded in `Villagers.tsx`.
-- **HUD** — the disabled "Task control connects next" dock was removed from `GameHud.tsx` and `globals.css`.
-- **Lighting/camera** — forest-green background; ortho zoom locked at default (no zoom-out).
+- **Canopy** — dense instanced Fantasy Town Kit pines (`village.tree*`) mixed with Nature pines, plus Fantasy kit rocks (`village.rock*`). **No trees on the clan plot.** Beach/shore wedge stays open.
+- **Beach rampart** — the only plot-perimeter wall. `walls.ts` generates a single instanced `harbor.castleWall` line on the green rim at `BEACH_WALL_Z = 26`, with a centre gate opening, flanking small towers, and `harbor.towerWatch` at both ends. The Approval Gate stands in the opening.
+- **Harbor** — `Harbor.tsx` + `shore-layout.ts`: wooden pier, three bobbing Kenney ships plus a rowboat beyond `WATER_EDGE_Z`, crates/barrels/palms, shore lookout tower. Bobbing is disabled under reduced motion.
+- **Villagers** — `Villagers.tsx` + `villager-wander.ts`: 10 Kenney **Blocky Characters**. Town-hall clearance is 8.8 world units so they walk around the keep, not through it.
+- **Roads** — Town Hall plaza plus a main avenue from the plaza to the beach gate (`roads.ts`).
+- **HUD** — Clerk `firstName` / `username` under **ClanCode** (fallback `Island`). Device presence, audio, building directory, and edit-mode toggle. Quest placeholder removed.
+- **Lighting/camera** — forest-green background; ortho zoom locked at default. Camera overview is `(42, 48, 42)`.
+- **Shared constants** — `app/game/state/island.ts` drives terrain, canopy, water, camera lock, beach-wall geometry, and plot-bounds tests.
 
-### Plot + village validation (2026-08-30)
+### Clan castle (Town Hall) — Castle Kit sample
+
+Town Hall is assembled in `app/game/prefabs/TownHall.tsx` from **Kenney Castle Kit** to match `public/assets/kenney_castle-kit/Sample.png`.
+
+- Kit modules are **1 world unit**. `CELL = 1`. Square storeys stack at `1.01`; hexagon base height is `1.31`.
+- **One cell, one piece.** A wall and a tower never share the same cell (that caused the clipped / overcrowded keep).
+- **L-courtyard:** north/west/east curtains, east wood-lookout wing, south gatehouse.
+- **Gatehouse:** two `wall-corner-half-tower` round turrets, `wall-doorway`, `metal-gate`, wooden `gate`, `bridge-draw`, two `flag-banner-short`.
+- **Towers:** tall square keeps with `tower-square-top-roof-high` (steep blue pyramid), inner `tower-slant-roof` gabled keep, inner-corner hexagon with blue conical roof.
+- **Dressing:** siege engines, pines, rocks, and logs sit **2–4 units off** the curtains.
+
+**Do not** restore KayKit Medieval Hexagon / Adventurers. Those packs were tried, then deleted: Windows texture paths and GLB padding broke Three.js (`Couldn't load texture {}`). The island is Kenney-only.
+
+### Standing windmills
+
+Kit `windmill.glb` is a **sail disc** (AABB ~0.47×3.11×3.11), not a tower. Do not use it as the mill body.
+
+`Mills.tsx` builds a standing mill: Fantasy Town `wall-rounded` stone tower + timber storey + `roof-high-point` + four `blade` sails at the hub spinning on **Z**. Semantic mill at `(-10, -4)`; decorative `SmallWindmill` at the four grass corners.
+
+### Village spacing
+
+Semantic and decorative buildings sit on an **8-tile ring** around the origin so cottages are on the grass, not inside the keep. Town Hall footprint is `[12, 12]`.
+
+`mergeSavedLayout` rejects otherwise-valid saves that still crowd the keep (any non-gate placement with Chebyshev distance `< 6` tiles from origin) and falls back to `DEFAULT_SEED_LAYOUT`. Refreshing `/dashboard` picks up the new seed for those packed layouts.
+
+### Clan layout editor
+
+Clash-style **Edit mode** on the gridded plot (presentation-only — does not affect runs, approvals, or CLI):
+
+- **Enter** — ✥ button in `GameHud.tsx` toggles edit mode.
+- **Drag** — left-drag a building onto a free tile. Invalid tiles snap back. Right-drag pans. Approval Gate stays in the beach opening.
+- **Remove / shop** — decorative and prop items can be removed; `PlacementShop.tsx` lists buildings, decorations, and Kenney props from `placable-catalog.ts`.
+- **Fixed** — Approval Gate only; beach rampart, roads, harbor, forest, villagers.
+- **Persistence** — `GET`/`PUT` `/api/clan/layout` stores per-Clerk-user JSON in Neon `clan_layouts` (`drizzle/0001_clan_layouts.sql`). The API creates the table if it is missing. Layout edits autosave after a short debounce.
+- **Model** — unified `ClanPlacement` union in `clan-layout.ts`; default seed merges semantic + decorative layouts; max 48 user items.
+
+### Catalog (current)
+
+**351** verified GLBs via `bun run game:assets:check`: Fantasy Town 89, Nature 122, Pirate 38, Survival 29, **Castle 44**, Retro Fantasy 11, Blocky Characters 18.
+
+Kits on disk: Fantasy Town, Nature, Pirate, Survival, Castle (`public/assets/kenney_castle-kit/`), Retro Fantasy (`public/assets/kenney_retro-fantasy-kit (1)/`), Blocky Characters. URLs go through `kenneyGlbUrl()` only.
+
+### Plot + village validation (2026-08-30, Sample.png keep)
 
 | Check | Result |
 |-------|--------|
-| `bun run game:assets:check` | 280 verified GLBs (Fantasy 77, Nature 122, Pirate 37, Survival 26, BlockyCharacters 18) |
-| `bun run test:game` | 42 pass |
-| `bunx tsc --noEmit` | pass |
-| `bun run lint` | pass (0 errors) |
-| `bun run build -- --webpack` | pass |
-| `git diff -- clan-cli` | empty |
+| `bun run game:assets:check` | 351 verified GLBs |
+| `bun run test:game` | 57 pass |
+| `bun run test:clan-layout` | 16 pass |
+| Browser `/dashboard` | pending signed-in Clerk session (keep vs `Sample.png`) |
 
 **Canopy density (full quality, seed `CANOPY_SEED`):** ~2,064 instanced trees + ~145 Fantasy kit rocks; zero trees on the gridded plot (`PLOT_EXCLUSION_HALF = 24.2`).
 
-**Clan building restyle:** Town Hall gatehouse, houses, composed windmill tower (`wall-curved` + `roof-point`), and timber watermill use Fantasy Town Kit modular pieces from Sample.png. Workshop/forge/pirate towers unchanged.
+### Earlier restyles on this branch (superseded)
 
-Visual screenshot passes at 1440×900, 1366×768, and 390×844 require a signed-in Clerk session at `/dashboard/clan`.
+These notes are history, not current layout:
+
+- Closed Fantasy Town gatehouse / packed 3-tile lattice — replaced by the Castle Kit L-courtyard and 8-tile ring.
+- Hybrid Retro Fantasy keep with **no** curtain walls, windmills removed, Search Tower and Test Camp off the default plot — replaced. Windmills, search tower, and test camp are back on the default seed. The keep **does** use Castle Kit curtains (they are the Town Hall prefab, not a plot-perimeter wall).
+- KayKit buildings and adventurers — removed from `public/assets/` and the catalog.
 
 ---
 
@@ -239,7 +282,7 @@ Visual screenshot passes at 1440×900, 1366×768, and 390×844 require a signed-
 - A typed catalog selects 92 verified GLBs from the four CC0 Kenney kits. `bun run game:assets:check` validates every selected file.
 - Orthographic pan, zoom, reset, building focus/selection, adaptive quality, user-gesture audio, loading UI, and a non-WebGL fallback are wired.
 - The HUD and scene explicitly remain presentation-only. The production website-to-CLI task composer and real RunEvent stream are not connected in this milestone.
-- Rapier placement/editing and Neon layout persistence are intentionally deferred to the next interaction milestone.
+- Rapier placement/editing deferred; **Neon layout persistence shipped** in the layout editor milestone above.
 
 ### Implemented foundation inventory
 
@@ -313,8 +356,8 @@ credentials.json (token + deviceId + controlUrl bundle)
 
 - Clerk on `/`, protected game at `/dashboard` (layout-level `auth.protect`), public `/pair`
 - `/dashboard/clan` aliases the game and `/dashboard/devices` preserves pairing/revocation controls
-- Drizzle tables: `devices`, `pairing_challenges`, `pairing_deliveries`
-- Migration: `drizzle/0000_smooth_sasquatch.sql`
+- Drizzle tables: `devices`, `pairing_challenges`, `pairing_deliveries`, `clan_layouts`
+- Migrations: `drizzle/0000_smooth_sasquatch.sql`, `drizzle/0001_clan_layouts.sql`
 - Dashboard polls `GET /api/devices` every 5s; green connected dot in `device-panel.tsx`
 - Copy clarifies: pair once, run `clancode`, no second login
 

@@ -16,13 +16,13 @@ const plotFragmentShader = `
     vec2 grid = vWorldXZ / uTileSize;
     vec2 cell = fract(grid);
     float checker = mod(floor(grid.x) + floor(grid.y), 2.0);
-    vec3 light = vec3(0.72, 0.88, 0.48);
-    vec3 dark = vec3(0.66, 0.82, 0.44);
-    vec3 base = mix(light, dark, checker * 0.35);
+    vec3 light = vec3(0.74, 0.90, 0.50);
+    vec3 dark = vec3(0.67, 0.84, 0.46);
+    vec3 base = mix(light, dark, checker * 0.32);
     float lineX = smoothstep(0.02, 0.0, abs(cell.x - 0.5) - 0.48);
     float lineY = smoothstep(0.02, 0.0, abs(cell.y - 0.5) - 0.48);
-    float gridLine = max(lineX, lineY) * 0.12;
-    vec3 color = mix(base, vec3(0.55, 0.72, 0.38), gridLine);
+    float gridLine = max(lineX, lineY) * 0.1;
+    vec3 color = mix(base, vec3(0.52, 0.70, 0.36), gridLine);
     gl_FragColor = vec4(color, 1.0);
   }
 `;

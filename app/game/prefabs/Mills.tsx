@@ -5,92 +5,118 @@ import { Group } from "three";
 import { AssetModel } from "@/app/game/scene/AssetModel";
 import { useContinuousRotation } from "./useContinuousRotation";
 
-const CURVED_SEGMENTS = 8;
-const TOWER_RADIUS = 0.92;
+/** Hub sits on the timber storey, sails in the XY plane, spinning around Z. */
+const SAIL_HUB_Y = 2.35;
+const SAIL_HUB_Z = 0.56;
+const SAIL_SCALE = 0.68;
 
-/** Hub height on the composed cylindrical tower (curved walls + cap). */
-const WINDMILL_BLADE_Y = 4.05;
-
-function WindmillTower({ bladeRef, bladeScale }: { bladeRef: RefObject<Group | null>; bladeScale: number }) {
+function WindmillSails({
+  bladeRef,
+}: {
+  bladeRef: RefObject<Group | null>;
+}) {
   return (
-    <>
-      {[0, 1, 2].flatMap((level) =>
-        Array.from({ length: CURVED_SEGMENTS }, (_, segment) => {
-          const angle = (segment / CURVED_SEGMENTS) * Math.PI * 2;
-          return (
-            <AssetModel
-              key={`tower:${level}:${segment}`}
-              assetKey="townHall.wallCurved"
-              position={[
-                Math.sin(angle) * TOWER_RADIUS,
-                level,
-                Math.cos(angle) * TOWER_RADIUS,
-              ]}
-              rotation={[0, angle + Math.PI, 0]}
-            />
-          );
-        }),
-      )}
-      <AssetModel assetKey="townHall.balconyFence" position={[0, 2.55, TOWER_RADIUS * 0.35]} />
-      <AssetModel assetKey="townHall.overhang" position={[0, 2.5, 0]} rotation={[0, Math.PI / 4, 0]} scale={0.85} />
-      <AssetModel assetKey="townHall.roofPoint" position={[0, 3.15, 0]} />
-      <group ref={bladeRef} position={[0, WINDMILL_BLADE_Y, TOWER_RADIUS + 0.05]}>
-        <AssetModel assetKey="village.windmillBlade" scale={bladeScale} />
-      </group>
-    </>
+    <group ref={bladeRef} position={[0, SAIL_HUB_Y, SAIL_HUB_Z]}>
+      {[0, 1, 2, 3].map((index) => (
+        <AssetModel
+          key={index}
+          assetKey="village.windmillBlade"
+          rotation={[0, 0, (Math.PI / 2) * index]}
+          scale={SAIL_SCALE}
+        />
+      ))}
+    </group>
+  );
+}
+
+/** Fantasy Town sample mill: round stone tower, timber deck, conical roof, hub sails. */
+function WindmillTower({
+  bladeRef,
+  bodyScale = 1,
+}: {
+  bladeRef: RefObject<Group | null>;
+  bodyScale?: number;
+}) {
+  return (
+    <group scale={bodyScale}>
+      <AssetModel assetKey="townHall.wallRounded" />
+      <AssetModel assetKey="townHall.wallRounded" position={[0, 1, 0]} />
+      <AssetModel assetKey="townHall.wallWoodRounded" position={[0, 2, 0]} />
+      <AssetModel assetKey="townHall.roofHighPoint" position={[0, 3, 0]} />
+
+      <AssetModel assetKey="townHall.balconyFence" position={[0.52, 1.02, 0]} rotation={[0, Math.PI / 2, 0]} scale={0.9} />
+      <AssetModel assetKey="townHall.balconyFence" position={[-0.52, 1.02, 0]} rotation={[0, -Math.PI / 2, 0]} scale={0.9} />
+      <AssetModel assetKey="townHall.balconyFence" position={[0, 1.02, 0.52]} scale={0.9} />
+      <AssetModel assetKey="townHall.balconyFence" position={[0, 1.02, -0.52]} rotation={[0, Math.PI, 0]} scale={0.9} />
+
+      <AssetModel assetKey="townHall.stairsWood" position={[0.72, 0, 0.15]} rotation={[0, Math.PI / 2, 0]} scale={0.85} />
+      <AssetModel assetKey="village.lantern" position={[0.55, 1.15, 0.45]} scale={0.7} />
+
+      <WindmillSails bladeRef={bladeRef} />
+    </group>
+  );
+}
+
+function WindmillYard({
+  bladeRef,
+  bodyScale,
+  reducedMotion,
+  spinDuration,
+}: {
+  bladeRef: RefObject<Group | null>;
+  bodyScale: number;
+  reducedMotion: boolean;
+  spinDuration: number;
+}) {
+  useContinuousRotation(bladeRef, reducedMotion, spinDuration, "z");
+  return (
+    <group>
+      <WindmillTower bladeRef={bladeRef} bodyScale={bodyScale} />
+      <AssetModel assetKey="village.fence" position={[-1.35, 0, 0.85]} rotation={[0, Math.PI / 2, 0]} scale={1.15} />
+      <AssetModel assetKey="village.fence" position={[1.35, 0, 0.85]} rotation={[0, -Math.PI / 2, 0]} scale={1.15} />
+      <AssetModel assetKey="village.fenceCurved" position={[0, 0, 1.45]} scale={1.05} />
+      <AssetModel assetKey="village.rockSmall" position={[-0.85, 0, 0.55]} scale={0.8} />
+    </group>
   );
 }
 
 export function Windmill({ reducedMotion = false }: { reducedMotion?: boolean }) {
   const blade = useRef<Group>(null);
-  useContinuousRotation(blade, reducedMotion, 14);
   return (
-    <group rotation={[0, Math.PI / 2, 0]}>
-      <WindmillTower bladeRef={blade} bladeScale={1.1} />
-    </group>
+    <WindmillYard
+      bladeRef={blade}
+      bodyScale={1.15}
+      reducedMotion={reducedMotion}
+      spinDuration={14}
+    />
   );
 }
 
-/** Decorative wind farm mill — same kit tower at a smaller scale. */
 export function SmallWindmill({ reducedMotion = false }: { reducedMotion?: boolean }) {
   const blade = useRef<Group>(null);
-  useContinuousRotation(blade, reducedMotion, 9.5);
   return (
-    <group rotation={[0, Math.PI / 2, 0]} scale={0.72}>
-      <WindmillTower bladeRef={blade} bladeScale={1.05} />
-    </group>
+    <WindmillYard
+      bladeRef={blade}
+      bodyScale={0.95}
+      reducedMotion={reducedMotion}
+      spinDuration={9.5}
+    />
   );
 }
 
-/** Sample.png timber watermill — green-roof house with side wheel. */
+/** Sample.png timber watermill — complete house mesh with side wheel. */
 export function Watermill({ reducedMotion = false }: { reducedMotion?: boolean }) {
   const wheel = useRef<Group>(null);
-  useContinuousRotation(wheel, reducedMotion, 11.5);
+  useContinuousRotation(wheel, reducedMotion, 11.5, "x");
   return (
-    <group rotation={[0, Math.PI / 2, 0]}>
-      {/* Ground floor */}
-      <AssetModel assetKey="townHall.wallWoodDoor" position={[0, 0, 1]} />
-      <AssetModel assetKey="townHall.wallWoodWindow" position={[-1, 0, 1]} />
-      <AssetModel assetKey="townHall.wallWoodWindow" position={[1, 0, 1]} />
-      <AssetModel assetKey="townHall.wallWood" position={[-1, 0, 0]} />
-      <AssetModel assetKey="townHall.wallWood" position={[1, 0, 0]} />
-      <AssetModel assetKey="townHall.wallWoodCorner" position={[-1, 0, -1]} />
-      <AssetModel assetKey="townHall.wallWoodCorner" position={[1, 0, -1]} />
-      <AssetModel assetKey="townHall.wallWood" position={[0, 0, -1]} rotation={[0, Math.PI, 0]} />
-      {/* Upper floor */}
-      <AssetModel assetKey="townHall.wallWoodWindow" position={[-1, 1, 1]} />
-      <AssetModel assetKey="townHall.wallWoodWindow" position={[1, 1, 1]} />
-      <AssetModel assetKey="townHall.wallWood" position={[-1, 1, 0]} />
-      <AssetModel assetKey="townHall.wallWood" position={[1, 1, 0]} />
-      <AssetModel assetKey="townHall.wallWood" position={[0, 1, -1]} rotation={[0, Math.PI, 0]} />
-      {/* Teal/green gable roof from the sample */}
-      <AssetModel assetKey="townHall.roofGable" position={[0, 2, 0]} rotation={[0, Math.PI / 2, 0]} />
-      <AssetModel assetKey="townHall.roofLeft" position={[-0.5, 2, 0]} />
-      <AssetModel assetKey="townHall.roofRight" position={[0.5, 2, 0]} />
-      <AssetModel assetKey="townHall.chimney" position={[0.8, 2.5, -0.6]} scale={0.9} />
-      <group ref={wheel} position={[1.15, 0.6, 0]}>
+    <group rotation={[0, Math.PI / 2, 0]} scale={1.35}>
+      <AssetModel assetKey="village.watermill" />
+      <group ref={wheel} position={[1.0, 0.55, 0]}>
         <AssetModel assetKey="village.waterWheel" scale={1.05} />
       </group>
+      <AssetModel assetKey="village.cart" position={[-1.2, 0, 0.6]} rotation={[0, Math.PI / 4, 0]} scale={0.85} />
+      <AssetModel assetKey="village.fence" position={[-1.3, 0, -0.5]} rotation={[0, Math.PI / 2, 0]} scale={1.15} />
+      <AssetModel assetKey="village.fence" position={[0.5, 0, -1.1]} scale={1.15} />
     </group>
   );
 }
@@ -100,11 +126,14 @@ export function Farm() {
     <group>
       {[-1, 0, 1].map((x) => (
         <group key={x} position={[x, 0, 0]}>
-          <AssetModel assetKey="nature.cropRows" />
-          <AssetModel assetKey="nature.crops" position={[0, 0.02, 0]} scale={0.9} />
+          <AssetModel assetKey="nature.cropRows" scale={1.15} />
+          <AssetModel assetKey="nature.crops" position={[0, 0.02, 0]} scale={1.05} />
         </group>
       ))}
-      <AssetModel assetKey="village.fence" position={[0, 0, -0.85]} scale={2.8} />
+      <AssetModel assetKey="village.fenceGate" position={[0, 0, -1.05]} scale={1.55} />
+      <AssetModel assetKey="village.fence" position={[-1.35, 0, -0.55]} rotation={[0, Math.PI / 2, 0]} scale={1.25} />
+      <AssetModel assetKey="village.fence" position={[1.35, 0, -0.55]} rotation={[0, -Math.PI / 2, 0]} scale={1.25} />
+      <AssetModel assetKey="village.cart" position={[1.5, 0, 0.35]} rotation={[0, -Math.PI / 6, 0]} scale={0.8} />
     </group>
   );
 }

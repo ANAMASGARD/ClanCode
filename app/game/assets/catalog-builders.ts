@@ -20,7 +20,7 @@ const MODULAR: Pick<
   "uniformScale" | "pivotMode" | "pivotOffset" | "castsShadow" | "receivesShadow" | "instanceable"
 > = {
   uniformScale: 1,
-  pivotMode: "preserve-origin",
+  pivotMode: "ground-origin",
   pivotOffset: [0, 0, 0],
   castsShadow: true,
   receivesShadow: true,
@@ -157,6 +157,58 @@ export function natureProp(key: string, model: string, district: GameAssetDistri
     ...PROP,
     uniformScale: scale,
     instanceable: true,
+  });
+}
+
+export function castleModular(
+  key: string,
+  model: string,
+  district: GameAssetDistrict = "core",
+  role: GameAssetRole = "building",
+) {
+  return defineAsset(key, {
+    kit: "castle",
+    model,
+    role,
+    district,
+    ...MODULAR,
+  });
+}
+
+export function castleProp(key: string, model: string, district: GameAssetDistrict = "village", scale = 1) {
+  return defineAsset(key, {
+    kit: "castle",
+    model,
+    role: "prop",
+    district,
+    ...PROP,
+    uniformScale: scale,
+  });
+}
+
+export function retroFantasyModular(
+  key: string,
+  model: string,
+  district: GameAssetDistrict = "core",
+  role: GameAssetRole = "building",
+) {
+  return defineAsset(key, {
+    kit: "retroFantasy",
+    model,
+    role,
+    district,
+    ...MODULAR,
+  });
+}
+
+export function retroFantasyProp(key: string, model: string, district: GameAssetDistrict = "village", scale = 1) {
+  return defineAsset(key, {
+    kit: "retroFantasy",
+    model,
+    role: "prop",
+    district,
+    ...PROP,
+    uniformScale: scale,
   });
 }
 

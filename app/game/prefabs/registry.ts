@@ -2,9 +2,12 @@ import type { ComponentType } from "react";
 import type { SemanticBuildingId } from "@/app/game/state/default-layout";
 import type { DecorativePrefabId } from "@/app/game/state/decorative-layout";
 import {
+  ArcherTower,
   ArmyCamp,
   Bakery,
   Barracks,
+  CartHay,
+  GoldStore,
   Cottage,
   CropField,
   DefensePost,
@@ -12,6 +15,8 @@ import {
   GuardPost,
   LumberYard,
   MarketCluster,
+  RockGarden,
+  StallCorner,
   StorageYard,
   VillageHouseA,
   VillageHouseB,
@@ -39,6 +44,8 @@ export type PrefabDefinition = {
   footprint: readonly [number, number];
   selectionRadius: number;
   visualHeight: number;
+  /** Multiplier on BUILDING_VISUAL_SCALE for this prefab (presentation only). */
+  visualScale?: number;
   movable: boolean;
   district: "core" | "village" | "harbor" | "river" | "workshop" | "forest";
   component: ComponentType<{ reducedMotion?: boolean }>;
@@ -50,10 +57,11 @@ export const SEMANTIC_PREFABS: Record<
 > = {
   "town-hall": {
     id: "town-hall",
-    label: "Town Hall",
-    footprint: [6, 6],
-    selectionRadius: 5.5,
-    visualHeight: 8,
+    label: "Clan Castle",
+    footprint: [12, 12],
+    selectionRadius: 8,
+    visualHeight: 10,
+    visualScale: 1,
     movable: true,
     district: "core",
     component: TownHall,
@@ -63,7 +71,8 @@ export const SEMANTIC_PREFABS: Record<
     label: "Search Tower",
     footprint: [3, 3],
     selectionRadius: 3.2,
-    visualHeight: 9,
+    visualHeight: 6,
+    visualScale: 1.05,
     movable: true,
     district: "core",
     component: SearchTower,
@@ -71,9 +80,10 @@ export const SEMANTIC_PREFABS: Record<
   "builder-workshop": {
     id: "builder-workshop",
     label: "Builder Workshop",
-    footprint: [5, 5],
-    selectionRadius: 3.8,
-    visualHeight: 5,
+    footprint: [4, 4],
+    selectionRadius: 3.4,
+    visualHeight: 4,
+    visualScale: 1.05,
     movable: true,
     district: "workshop",
     component: BuilderWorkshop,
@@ -81,9 +91,10 @@ export const SEMANTIC_PREFABS: Record<
   "validation-forge": {
     id: "validation-forge",
     label: "Validation Forge",
-    footprint: [5, 5],
-    selectionRadius: 3.8,
-    visualHeight: 5,
+    footprint: [4, 4],
+    selectionRadius: 3.4,
+    visualHeight: 4,
+    visualScale: 1.05,
     movable: true,
     district: "workshop",
     component: ValidationForge,
@@ -92,8 +103,9 @@ export const SEMANTIC_PREFABS: Record<
     id: "session-lodge",
     label: "Session Lodge",
     footprint: [4, 4],
-    selectionRadius: 3.4,
+    selectionRadius: 3.2,
     visualHeight: 4,
+    visualScale: 1.05,
     movable: true,
     district: "core",
     component: SessionLodge,
@@ -104,6 +116,7 @@ export const SEMANTIC_PREFABS: Record<
     footprint: [4, 4],
     selectionRadius: 3.2,
     visualHeight: 4,
+    visualScale: 1.05,
     movable: true,
     district: "core",
     component: ModelShrine,
@@ -114,16 +127,17 @@ export const SEMANTIC_PREFABS: Record<
     footprint: [5, 3],
     selectionRadius: 4.2,
     visualHeight: 5,
-    movable: true,
+    movable: false,
     district: "core",
     component: ApprovalGate,
   },
   "test-camp": {
     id: "test-camp",
     label: "Test Camp",
-    footprint: [5, 4],
-    selectionRadius: 3.6,
+    footprint: [4, 4],
+    selectionRadius: 3.4,
     visualHeight: 4,
+    visualScale: 1.05,
     movable: true,
     district: "village",
     component: TestCamp,
@@ -131,9 +145,10 @@ export const SEMANTIC_PREFABS: Record<
   market: {
     id: "market",
     label: "Tool Market",
-    footprint: [5, 4],
-    selectionRadius: 3.5,
+    footprint: [4, 4],
+    selectionRadius: 3.4,
     visualHeight: 4,
+    visualScale: 1.05,
     movable: true,
     district: "village",
     component: Market,
@@ -143,7 +158,8 @@ export const SEMANTIC_PREFABS: Record<
     label: "Windmill",
     footprint: [4, 4],
     selectionRadius: 3.4,
-    visualHeight: 7,
+    visualHeight: 5,
+    visualScale: 1.1,
     movable: true,
     district: "village",
     component: Windmill,
@@ -151,9 +167,10 @@ export const SEMANTIC_PREFABS: Record<
   watermill: {
     id: "watermill",
     label: "Event Watermill",
-    footprint: [5, 5],
-    selectionRadius: 3.8,
-    visualHeight: 5,
+    footprint: [4, 4],
+    selectionRadius: 3.6,
+    visualHeight: 4,
+    visualScale: 1.1,
     movable: false,
     district: "river",
     component: Watermill,
@@ -192,6 +209,11 @@ export const DECORATIVE_PREFABS: Record<
   CropField,
   SmallWindmill,
   Well,
+  CartHay,
+  StallCorner,
+  RockGarden,
+  ArcherTower,
+  GoldStore,
 };
 
 export function getSemanticPrefab(id: SemanticBuildingId): PrefabDefinition {

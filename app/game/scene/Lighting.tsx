@@ -5,13 +5,13 @@ import { ContactShadows } from "@react-three/drei";
 export function Lighting({ lowQuality }: { lowQuality: boolean }) {
   return (
     <>
-      <color attach="background" args={["#3d8f48"]} />
-      <hemisphereLight color="#fff8e8" groundColor="#4a9a52" intensity={1.35} />
-      <ambientLight intensity={0.82} />
+      <color attach="background" args={["#2f7a3d"]} />
+      <hemisphereLight color="#fff4dc" groundColor="#3d8f48" intensity={1.45} />
+      <ambientLight intensity={0.78} />
       <directionalLight
         castShadow
-        color="#fff0c8"
-        intensity={1.65}
+        color="#ffe8b8"
+        intensity={1.85}
         position={[-14, 42, 18]}
         shadow-mapSize-width={lowQuality ? 1024 : 2048}
         shadow-mapSize-height={lowQuality ? 1024 : 2048}

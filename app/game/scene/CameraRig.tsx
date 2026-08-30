@@ -23,9 +23,11 @@ const MAX_TARGET = new Vector3(CAMERA_PAN_HALF_X, 0, CAMERA_PAN_HALF_Z_POS);
 export function CameraRig({
   focus,
   resetToken,
+  editMode = false,
 }: {
   focus: readonly [number, number, number] | null;
   resetToken: number;
+  editMode?: boolean;
 }) {
   const controls = useRef<OrbitControlsImpl>(null);
   const camera = useThree((state) => state.camera);
@@ -77,14 +79,19 @@ export function CameraRig({
         ref={controls}
         makeDefault
         enableRotate={false}
+        enablePan
         enableDamping
         dampingFactor={0.08}
         minZoom={CAMERA_MIN_ZOOM}
         maxZoom={CAMERA_MAX_ZOOM}
         zoomToCursor
         screenSpacePanning={false}
-        mouseButtons={{ LEFT: MOUSE.PAN, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }}
-        touches={{ ONE: TOUCH.PAN, TWO: TOUCH.DOLLY_PAN }}
+        mouseButtons={
+          editMode
+            ? { MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }
+            : { LEFT: MOUSE.PAN, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }
+        }
+        touches={editMode ? { TWO: TOUCH.DOLLY_PAN } : { ONE: TOUCH.PAN, TWO: TOUCH.DOLLY_PAN }}
       />
     </>
   );

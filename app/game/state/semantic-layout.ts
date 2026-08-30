@@ -13,21 +13,21 @@ export type SemanticPlacement = {
 const GATE_TILE_Z = BEACH_WALL_Z / TILE;
 
 /**
- * Open Clash-style village on a 3-tile lattice. No interior walls: the plot is
- * packed with buildings and the only rampart faces the beach.
+ * Village ring around the Castle Kit keep. Chebyshev distance from the
+ * origin is at least 8 tiles so cottages sit on the grass, not the curtains.
  */
 export const SEMANTIC_PLACEMENTS: SemanticPlacement[] = [
   { id: "town-hall", tileX: 0, tileZ: 0 },
-  { id: "search-tower", tileX: 0, tileZ: -3 },
-  { id: "session-lodge", tileX: -3, tileZ: 0 },
-  { id: "model-shrine", tileX: 3, tileZ: 0 },
-  { id: "validation-forge", tileX: -3, tileZ: -3 },
-  { id: "builder-workshop", tileX: 3, tileZ: -3 },
-  { id: "windmill", tileX: -9, tileZ: -3 },
-  { id: "farm", tileX: 9, tileZ: -3 },
-  { id: "watermill", tileX: -6, tileZ: 3 },
-  { id: "market", tileX: -3, tileZ: 6 },
-  { id: "test-camp", tileX: 3, tileZ: 3 },
+  { id: "search-tower", tileX: 0, tileZ: -8 },
+  { id: "session-lodge", tileX: -8, tileZ: 0 },
+  { id: "model-shrine", tileX: 8, tileZ: 0 },
+  { id: "validation-forge", tileX: -8, tileZ: -8 },
+  { id: "builder-workshop", tileX: 8, tileZ: -8 },
+  { id: "windmill", tileX: -10, tileZ: -4 },
+  { id: "farm", tileX: 10, tileZ: -4 },
+  { id: "watermill", tileX: -8, tileZ: 6 },
+  { id: "market", tileX: -4, tileZ: 8 },
+  { id: "test-camp", tileX: 8, tileZ: 6 },
   { id: "approval-gate", tileX: 0, tileZ: GATE_TILE_Z },
 ];
 

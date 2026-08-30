@@ -2,10 +2,11 @@
 
 import { useMemo } from "react";
 import type { SemanticBuilding, SemanticBuildingId } from "@/app/game/state/default-layout";
-import { DEFAULT_CLAN_LAYOUT } from "@/app/game/state/default-layout";
-import { DECORATIVE_PLACEMENTS } from "@/app/game/state/decorative-layout";
+import { buildSemanticBuildingsFromLayout } from "@/app/game/state/default-layout";
+import type { ClanPlacement } from "@/app/game/state/clan-layout";
+import { isEditablePlacement } from "@/app/game/state/clan-layout";
 import { layoutWorldPosition, ROAD_TILE_SCALE, ROAD_TILES } from "@/app/game/state/roads";
-import { GROUND_Y, tileToWorld } from "@/app/game/state/tile";
+import { BUILDING_VISUAL_SCALE, GROUND_Y } from "@/app/game/state/tile";
 import {
   BEACH_WALL,
   BEACH_WALL_TOWERS,
@@ -14,45 +15,153 @@ import {
 import { DECORATIVE_PREFABS, getSemanticPrefab } from "@/app/game/prefabs/registry";
 import { BuildingMarker } from "./BuildingMarker";
 import { AssetModel } from "./AssetModel";
+import { EditablePlacement, PlotGroundPicker } from "./EditablePlacement";
 import { InstancedAsset } from "./InstancedAsset";
 
 type VillageProps = {
+  layout: ClanPlacement[];
+  editMode: boolean;
   selectedId: SemanticBuildingId | null;
+  selectedPlacementId: string | null;
+  shopArmed: boolean;
   onSelect: (building: SemanticBuilding) => void;
+  onSelectPlacement: (placementId: string) => void;
+  onMovePlacement: (placementId: string, tileX: number, tileZ: number) => void;
+  onPickTile: (tileX: number, tileZ: number) => void;
+  onDragChange: (dragging: boolean) => void;
   reducedMotion: boolean;
 };
 
-export function Village({ selectedId, onSelect, reducedMotion }: VillageProps) {
+function placementInstanceId(placement: ClanPlacement): string {
+  return placement.kind === "semantic" ? placement.id : placement.id;
+}
+
+function semanticRenderScale(visualScale?: number): number {
+  return BUILDING_VISUAL_SCALE * (visualScale ?? 1);
+}
+
+export function Village({
+  layout,
+  editMode,
+  selectedId,
+  selectedPlacementId,
+  shopArmed,
+  onSelect,
+  onSelectPlacement,
+  onMovePlacement,
+  onPickTile,
+  onDragChange,
+  reducedMotion,
+}: VillageProps) {
+  const semanticBuildings = useMemo(
+    () => buildSemanticBuildingsFromLayout(layout),
+    [layout],
+  );
+
   return (
     <group>
       <BeachRampart />
       <RoadNetwork />
-      {DEFAULT_CLAN_LAYOUT.map((building) => {
-        const prefab = getSemanticPrefab(building.id);
-        const Component = prefab.component;
-        return (
-          <group key={building.id} position={building.position}>
-            <BuildingMarker
-              building={building}
-              selected={selectedId === building.id}
-              onSelect={onSelect}
-              radius={prefab.selectionRadius}
+      {editMode ? <PlotGroundPicker armed={shopArmed} onPick={onPickTile} /> : null}
+      {layout.map((placement) => {
+        const id = placementInstanceId(placement);
+
+        if (placement.kind === "semantic") {
+          const building = semanticBuildings.find((entry) => entry.id === placement.id);
+          if (!building) return null;
+          const prefab = getSemanticPrefab(placement.id);
+          const Component = prefab.component;
+          const renderScale = semanticRenderScale(prefab.visualScale);
+
+          if (editMode && isEditablePlacement(placement)) {
+            return (
+              <EditablePlacement
+                key={id}
+                placement={placement}
+                placementId={id}
+                layout={layout}
+                selected={selectedPlacementId === id}
+                onSelect={onSelectPlacement}
+                onMove={onMovePlacement}
+                onDragChange={onDragChange}
+                radius={prefab.selectionRadius}
+                scale={renderScale}
+              >
+                <Component reducedMotion={reducedMotion} />
+              </EditablePlacement>
+            );
+          }
+
+          return (
+            <group key={id} position={building.position} scale={renderScale}>
+              <BuildingMarker
+                building={building}
+                selected={selectedId === placement.id}
+                onSelect={onSelect}
+                radius={prefab.selectionRadius}
+              >
+                <Component reducedMotion={reducedMotion} />
+              </BuildingMarker>
+            </group>
+          );
+        }
+
+        if (placement.kind === "decorative") {
+          const Component = DECORATIVE_PREFABS[placement.prefab];
+          if (editMode) {
+            return (
+              <EditablePlacement
+                key={id}
+                placement={placement}
+                placementId={id}
+                layout={layout}
+                selected={selectedPlacementId === id}
+                onSelect={onSelectPlacement}
+                onMove={onMovePlacement}
+                onDragChange={onDragChange}
+                scale={BUILDING_VISUAL_SCALE}
+              >
+                <Component reducedMotion={reducedMotion} />
+              </EditablePlacement>
+            );
+          }
+          return (
+            <group
+              key={id}
+              position={[placement.tileX * 2, GROUND_Y, placement.tileZ * 2]}
+              rotation={[0, placement.rotation ?? 0, 0]}
+              scale={BUILDING_VISUAL_SCALE}
             >
               <Component reducedMotion={reducedMotion} />
-            </BuildingMarker>
-          </group>
-        );
-      })}
-      {DECORATIVE_PLACEMENTS.map((placement) => {
-        const Component = DECORATIVE_PREFABS[placement.prefab];
-        const [x, , z] = tileToWorld(placement.tileX, placement.tileZ);
+            </group>
+          );
+        }
+
+        if (editMode) {
+          return (
+            <EditablePlacement
+              key={id}
+              placement={placement}
+              placementId={id}
+              layout={layout}
+              selected={selectedPlacementId === id}
+              onSelect={onSelectPlacement}
+              onMove={onMovePlacement}
+              onDragChange={onDragChange}
+              radius={1.6}
+            >
+              <AssetModel assetKey={placement.assetKey} />
+            </EditablePlacement>
+          );
+        }
+
         return (
           <group
-            key={placement.id}
-            position={[x, GROUND_Y, z]}
+            key={id}
+            position={[placement.tileX * 2, GROUND_Y, placement.tileZ * 2]}
             rotation={[0, placement.rotation ?? 0, 0]}
           >
-            <Component reducedMotion={reducedMotion} />
+            <AssetModel assetKey={placement.assetKey} />
           </group>
         );
       })}
@@ -60,7 +169,6 @@ export function Village({ selectedId, onSelect, reducedMotion }: VillageProps) {
   );
 }
 
-/** The only wall in the scene: a rampart facing the beach, with a gate. */
 function BeachRampart() {
   const wallInstances = useMemo(
     () =>

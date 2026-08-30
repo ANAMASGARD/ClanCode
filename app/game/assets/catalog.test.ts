@@ -22,7 +22,7 @@ describe("game asset catalog", () => {
 
   test("curates a broad but bounded asset set", () => {
     expect(CATALOG_ENTRIES.length).toBeGreaterThanOrEqual(170);
-    expect(CATALOG_ENTRIES.length).toBeLessThanOrEqual(285);
+    expect(CATALOG_ENTRIES.length).toBeLessThanOrEqual(360);
   });
 
   test("includes round canopy trees and shoreline rocks", () => {
@@ -37,6 +37,12 @@ describe("game asset catalog", () => {
     expect(GAME_ASSETS["nature.stoneLargeA"]).toBeDefined();
     expect(GAME_ASSETS["townHall.wallArch"]).toBeDefined();
     expect(GAME_ASSETS["townHall.roofPoint"]).toBeDefined();
+    expect(GAME_ASSETS["townHall.wallRounded"]).toBeDefined();
+    expect(GAME_ASSETS["castle.wall"]).toBeDefined();
+    expect(GAME_ASSETS["castle.wallCornerHalfTower"]).toBeDefined();
+    expect(GAME_ASSETS["castle.towerSlantRoof"]).toBeDefined();
+    expect(GAME_ASSETS["castle.bridgeDraw"]).toBeDefined();
+    expect(GAME_ASSETS["castle.siegeTower"]).toBeDefined();
   });
 });
 
@@ -65,5 +71,15 @@ describe("layout data", () => {
     const townHall = SEMANTIC_PLACEMENTS.find((p) => p.id === "town-hall");
     expect(townHall?.tileX).toBe(0);
     expect(townHall?.tileZ).toBe(0);
+  });
+
+  test("village buildings sit outside the keep curtains", () => {
+    for (const placement of SEMANTIC_PLACEMENTS) {
+      if (placement.id === "town-hall" || placement.id === "approval-gate") continue;
+      expect(Math.max(Math.abs(placement.tileX), Math.abs(placement.tileZ))).toBeGreaterThanOrEqual(8);
+    }
+    for (const placement of DECORATIVE_PLACEMENTS) {
+      expect(Math.max(Math.abs(placement.tileX), Math.abs(placement.tileZ))).toBeGreaterThanOrEqual(8);
+    }
   });
 });

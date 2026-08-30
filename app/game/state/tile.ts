@@ -1,3 +1,5 @@
+import { SURFACE_Y } from "./island";
+
 /** World tile size for grid-snapped village layout. */
 export const TILE = 2;
 
@@ -13,9 +15,12 @@ export function tileToWorld(tx: number, tz: number, y = 0): readonly [number, nu
   return [tx * TILE, y, tz * TILE] as const;
 }
 
-export function worldY(): number {
-  return 0.94;
+export function worldToTile(x: number, z: number): { tileX: number; tileZ: number } {
+  return { tileX: Math.round(x / TILE), tileZ: Math.round(z / TILE) };
 }
 
-/** Ground elevation for placed buildings and props. */
-export const GROUND_Y = worldY();
+/** Ground elevation for placed buildings, props, and villagers — sits on the plot surface. */
+export const GROUND_Y = SURFACE_Y + 0.01;
+
+/** Uniform scale for semantic/decorative prefabs at render time (presentation only). */
+export const BUILDING_VISUAL_SCALE = 1.3;

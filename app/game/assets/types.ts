@@ -9,7 +9,7 @@ export type GameAssetRole =
   | "tool"
   | "character";
 
-export type PivotMode = "preserve-origin" | "ground-center" | "custom";
+export type PivotMode = "preserve-origin" | "ground-origin" | "ground-center" | "custom";
 
 export type GameAssetDistrict =
   | "core"

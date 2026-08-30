@@ -1,6 +1,6 @@
 "use client";
 
-import { UserButton } from "@clerk/nextjs";
+import { UserButton, useUser } from "@clerk/nextjs";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -11,25 +11,39 @@ type GameHudProps = {
   selected: SemanticBuilding | null;
   muted: boolean;
   lowQuality: boolean;
+  editMode: boolean;
   onHome: () => void;
   onAudio: () => void;
   onInteract: () => void;
   onSelectBuilding: (building: SemanticBuilding) => void;
+  onToggleEditMode: () => void;
 };
 
-export function GameHud({ buildings, selected, muted, lowQuality, onHome, onAudio, onInteract, onSelectBuilding }: GameHudProps) {
+export function GameHud({
+  buildings,
+  selected,
+  muted,
+  lowQuality,
+  editMode,
+  onHome,
+  onAudio,
+  onInteract,
+  onSelectBuilding,
+  onToggleEditMode,
+}: GameHudProps) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [buildingsOpen, setBuildingsOpen] = useState(false);
+  const { user, isLoaded } = useUser();
+  const islandLabel = isLoaded
+    ? (user?.firstName ?? user?.username ?? user?.fullName ?? "Island")
+    : "Island";
+
   return (
     <div className="clan-hud" aria-label="ClanCode game controls">
       <header className="clan-topbar">
         <motion.div className="clan-brand-card" initial={{ opacity: 0, y: -18 }} animate={{ opacity: 1, y: 0 }}>
           <span className="clan-brand-mark">CC</span>
-          <span><strong>ClanCode</strong><small>Personal island</small></span>
-        </motion.div>
-        <motion.div className="clan-quest-card" initial={{ opacity: 0, y: -18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
-          <span className="clan-mode-badge">PLAN</span>
-          <span><small>Current quest</small><strong>Village foundation ready</strong></span>
+          <span><strong>ClanCode</strong><small>{islandLabel}</small></span>
         </motion.div>
         <div className="clan-utilities">
           <DevicePresence />
@@ -41,7 +55,7 @@ export function GameHud({ buildings, selected, muted, lowQuality, onHome, onAudi
       </header>
 
       <nav className="clan-rail" aria-label="Clan navigation">
-        <HudButton label="Town Hall" onClick={() => { onInteract(); onSelectBuilding(buildings[0]); }} icon="⌂" />
+        <HudButton label="Clan Castle" onClick={() => { onInteract(); onSelectBuilding(buildings[0]); }} icon="⌂" />
         <button
           type="button"
           className="clan-hud-button"
@@ -57,7 +71,16 @@ export function GameHud({ buildings, selected, muted, lowQuality, onHome, onAudi
         <Link href="/dashboard/devices" className="clan-hud-button" aria-label="Devices" onClick={onInteract}>⌁</Link>
         <HudButton label="Sessions (coming soon)" onClick={onInteract} icon="◫" />
         <HudButton label="Models (coming soon)" onClick={onInteract} icon="◇" />
-        <button type="button" className="clan-hud-button clan-hud-button-disabled" aria-label="Edit layout arrives in the next milestone" disabled>✥</button>
+        <button
+          type="button"
+          className={`clan-hud-button ${editMode ? "clan-hud-button-active" : ""}`}
+          aria-label="Edit clan layout"
+          title="Edit layout"
+          onClick={() => {
+            onInteract();
+            onToggleEditMode();
+          }}
+        >✥</button>
       </nav>
 
       <AnimatePresence>

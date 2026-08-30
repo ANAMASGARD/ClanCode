@@ -19,7 +19,8 @@
     "test:pairing": "bun test app/lib/pairing app/lib/realtime",
     "game:assets:check": "bun run scripts/verify-game-assets.ts",
     "game:assets:inspect": "bun run scripts/inspect-game-assets.ts",
-    "test:game": "bun test app/game app/lib/visualization/kenney.test.ts"
+    "test:game": "bun test app/game app/lib/visualization/kenney.test.ts",
+    "test:clan-layout": "bun test app/lib/clan-layout app/game/state/layout-editor.test.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.8.2",

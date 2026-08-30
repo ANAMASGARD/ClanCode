@@ -2,50 +2,138 @@
 
 import { useProgress } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
-import { Component, Suspense, useEffect, useMemo, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component, Suspense, useCallback, useEffect, useMemo, useState, type ErrorInfo, type ReactNode } from "react";
 import { ACESFilmicToneMapping, PCFSoftShadowMap, SRGBColorSpace } from "three";
 import { useClanAudio } from "./audio/useClanAudio";
+import { EditModeHud } from "./hud/EditModeHud";
 import { GameHud } from "./hud/GameHud";
+import { useClanLayout } from "./hooks/useClanLayout";
 import { ClanScene } from "./scene/ClanScene";
-import { DEFAULT_CLAN_LAYOUT, type SemanticBuilding, type SemanticBuildingId } from "./state/default-layout";
+import {
+  buildSemanticBuildingsFromLayout,
+  type SemanticBuilding,
+  type SemanticBuildingId,
+} from "./state/default-layout";
+import type { ClanPlacement } from "./state/clan-layout";
+import {
+  addPlacement,
+  createDecorativePlacement,
+  createPropPlacement,
+  movePlacement,
+  removePlacement,
+} from "./state/layout-editor";
+import { findShopItem, type PlacableShopItem } from "./state/placable-catalog";
 
 export function ClanGame() {
   const [webgl] = useState(() => canUseWebGL());
   const [selected, setSelected] = useState<SemanticBuilding | null>(null);
+  const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(null);
   const [resetToken, setResetToken] = useState(0);
   const [sceneError, setSceneError] = useState<string | null>(null);
+  const [shopOpen, setShopOpen] = useState(false);
+  const [armedShopId, setArmedShopId] = useState<string | null>(null);
+  const [replaceHint, setReplaceHint] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const { muted, interact, toggleMuted } = useClanAudio();
   const reducedMotion = useReducedMotion();
+  const layoutState = useClanLayout();
+
   const lowQuality = useMemo(() => {
     if (typeof navigator === "undefined") return false;
     return navigator.hardwareConcurrency <= 4 || window.matchMedia("(max-width: 760px)").matches;
   }, []);
 
+  const buildings = useMemo(
+    () => buildSemanticBuildingsFromLayout(layoutState.layout),
+    [layoutState.layout],
+  );
+
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === "Home") {
         setSelected(null);
+        setSelectedPlacementId(null);
         setResetToken((token) => token + 1);
       }
-      if (event.key === "Escape") setSelected(null);
+      if (event.key === "Escape") {
+        if (layoutState.editMode) {
+          layoutState.done();
+          setShopOpen(false);
+          setArmedShopId(null);
+          setReplaceHint(false);
+        }
+        setSelected(null);
+        setSelectedPlacementId(null);
+      }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, []);
+  }, [layoutState]);
 
   const reset = () => {
     setSelected(null);
+    setSelectedPlacementId(null);
     setResetToken((token) => token + 1);
   };
+
   const select = (building: SemanticBuilding) => {
+    if (layoutState.editMode) return;
     interact();
     setSelected(building);
   };
 
-  if (!webgl || sceneError) return <WebGLFallback error={sceneError} />;
+  const enterEditMode = () => {
+    layoutState.setEditMode(true);
+    setSelected(null);
+    setSelectedPlacementId(null);
+    setShopOpen(false);
+    setArmedShopId(null);
+    setReplaceHint(false);
+  };
+
+  const handleMovePlacement = useCallback(
+    (placementId: string, tileX: number, tileZ: number) => {
+      layoutState.setDraft((current) => movePlacement(current, placementId, tileX, tileZ) ?? current);
+    },
+    [layoutState],
+  );
+
+  const handleRemove = () => {
+    if (!selectedPlacementId) return;
+    layoutState.setDraft((current) => removePlacement(current, selectedPlacementId) ?? current);
+    setSelectedPlacementId(null);
+    setReplaceHint(true);
+    setShopOpen(true);
+  };
+
+  const handleArmShopItem = (item: PlacableShopItem) => {
+    setArmedShopId(item.shopId);
+    setReplaceHint(false);
+  };
+
+  const createPlacementFromShop = (item: PlacableShopItem, tileX: number, tileZ: number): ClanPlacement | null => {
+    const id = crypto.randomUUID();
+    if (item.kind === "prefab") {
+      return createDecorativePlacement(item.prefab, tileX, tileZ, id);
+    }
+    return createPropPlacement(item.assetKey, tileX, tileZ, id);
+  };
+
+  const handlePickTile = (tileX: number, tileZ: number) => {
+    if (!armedShopId) return;
+    const item = findShopItem(armedShopId);
+    if (!item) return;
+    const placement = createPlacementFromShop(item, tileX, tileZ);
+    if (!placement) return;
+    layoutState.setDraft((current) => addPlacement(current, placement) ?? current);
+    setArmedShopId(null);
+    setReplaceHint(false);
+  };
+
+  if (!webgl || sceneError) return <WebGLFallback error={sceneError} buildings={buildings} />;
 
   return (
-    <main className="clan-game-shell">
+    <main className={`clan-game-shell${layoutState.editMode ? " is-editing" : ""}${dragging ? " is-dragging" : ""}`}>
       <SceneErrorBoundary onError={(error) => setSceneError(error.message)}>
         <Canvas
           shadows="percentage"
@@ -59,10 +147,18 @@ export function ClanGame() {
         >
           <Suspense fallback={null}>
             <ClanScene
+              layout={layoutState.layout}
+              editMode={layoutState.editMode}
               selectedId={selected?.id ?? null}
+              selectedPlacementId={selectedPlacementId}
+              shopArmed={armedShopId !== null}
               onSelect={select}
+              onSelectPlacement={setSelectedPlacementId}
+              onMovePlacement={handleMovePlacement}
+              onPickTile={handlePickTile}
+              onDragChange={setDragging}
               onReset={reset}
-              focus={selected?.position ?? null}
+              focus={layoutState.editMode ? null : selected?.position ?? null}
               resetToken={resetToken}
               lowQuality={lowQuality}
               reducedMotion={reducedMotion}
@@ -72,15 +168,32 @@ export function ClanGame() {
       </SceneErrorBoundary>
       <SceneProgress />
       <GameHud
-        buildings={DEFAULT_CLAN_LAYOUT}
+        buildings={buildings}
         selected={selected}
         muted={muted}
         lowQuality={lowQuality}
+        editMode={layoutState.editMode}
         onHome={reset}
         onAudio={toggleMuted}
         onInteract={interact}
         onSelectBuilding={select}
+        onToggleEditMode={enterEditMode}
       />
+      {layoutState.editMode ? (
+        <EditModeHud
+          saving={layoutState.saving}
+          error={layoutState.error}
+          shopOpen={shopOpen}
+          armedShopId={armedShopId}
+          replaceHint={replaceHint}
+          canRemove={selectedPlacementId !== null}
+          onDone={layoutState.done}
+          onToggleShop={() => setShopOpen((open) => !open)}
+          onRemove={handleRemove}
+          onArmShopItem={handleArmShopItem}
+          onCloseShop={() => setShopOpen(false)}
+        />
+      ) : null}
     </main>
   );
 }
@@ -103,14 +216,14 @@ function ClanLoading({ label, progress }: { label: string; progress?: number }) 
   );
 }
 
-function WebGLFallback({ error }: { error: string | null }) {
+function WebGLFallback({ error, buildings }: { error: string | null; buildings: readonly SemanticBuilding[] }) {
   return (
     <main className="clan-fallback">
       <span className="clan-eyebrow">3D visualization unavailable</span>
       <h1>Your clan is still here.</h1>
       <p>{error ?? "This browser or device could not start WebGL. Device controls remain available."}</p>
       <div className="clan-fallback-grid">
-        {DEFAULT_CLAN_LAYOUT.map((building) => <div key={building.id}><strong>{building.name}</strong><span>{building.purpose}</span></div>)}
+        {buildings.map((building) => <div key={building.id}><strong>{building.name}</strong><span>{building.purpose}</span></div>)}
       </div>
       <a href="/dashboard/devices">Open device controls</a>
     </main>

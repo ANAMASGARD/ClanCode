@@ -1,8 +1,7 @@
 import type { GameAssetKey } from "@/app/game/assets/catalog";
-import { DECORATIVE_PLACEMENTS } from "./decorative-layout";
+import type { ClanPlacement } from "./clan-layout";
 import { PLOT_HALF } from "./island";
 import { mulberry32 } from "./seeded-random";
-import { SEMANTIC_PLACEMENTS } from "./semantic-layout";
 import { TILE } from "./tile";
 
 /** Villagers roam the whole plot, kept a little inside the dirt edge. */
@@ -12,8 +11,8 @@ export const WANDER_HALF = PLOT_HALF - 2;
 export const MAX_HOP = 10;
 export const MIN_HOP = 3;
 
-const TOWN_HALL_CLEARANCE = 4.2;
-const BUILDING_CLEARANCE = 2.4;
+const TOWN_HALL_CLEARANCE = 8.8;
+const BUILDING_CLEARANCE = 3.0;
 
 export type Blocker = {
   x: number;
@@ -21,32 +20,29 @@ export type Blocker = {
   radius: number;
 };
 
-function buildingBlockers(): Blocker[] {
+export function buildBlockers(layout: readonly ClanPlacement[]): Blocker[] {
   const blockers: Blocker[] = [];
-  for (const placement of SEMANTIC_PLACEMENTS) {
-    // The gate sits in the beach rampart, outside the roaming area.
-    if (placement.id === "approval-gate") continue;
+  for (const placement of layout) {
+    if (placement.kind === "semantic" && placement.id === "approval-gate") continue;
     blockers.push({
       x: placement.tileX * TILE,
       z: placement.tileZ * TILE,
-      radius: placement.id === "town-hall" ? TOWN_HALL_CLEARANCE : BUILDING_CLEARANCE,
-    });
-  }
-  for (const placement of DECORATIVE_PLACEMENTS) {
-    blockers.push({
-      x: placement.tileX * TILE,
-      z: placement.tileZ * TILE,
-      radius: BUILDING_CLEARANCE,
+      radius:
+        placement.kind === "semantic" && placement.id === "town-hall"
+          ? TOWN_HALL_CLEARANCE
+          : BUILDING_CLEARANCE,
     });
   }
   return blockers;
 }
 
-export const BUILDING_BLOCKERS: readonly Blocker[] = buildingBlockers();
-
-export function isWalkable(x: number, z: number): boolean {
+export function isWalkableOnLayout(
+  layout: readonly ClanPlacement[],
+  x: number,
+  z: number,
+): boolean {
   if (Math.abs(x) > WANDER_HALF || Math.abs(z) > WANDER_HALF) return false;
-  for (const blocker of BUILDING_BLOCKERS) {
+  for (const blocker of buildBlockers(layout)) {
     if (Math.hypot(x - blocker.x, z - blocker.z) < blocker.radius) return false;
   }
   return true;
@@ -57,11 +53,8 @@ export type WanderTarget = {
   z: number;
 };
 
-/**
- * Random nearby destination anywhere on the plot. Falls back to the current
- * spot when boxed in, so callers never receive a blocked target.
- */
-export function pickWanderTarget(
+export function pickWanderTargetOnLayout(
+  layout: readonly ClanPlacement[],
   random: () => number,
   fromX: number,
   fromZ: number,
@@ -72,7 +65,7 @@ export function pickWanderTarget(
     const distance = MIN_HOP + random() * (MAX_HOP - MIN_HOP);
     const x = fromX + Math.cos(angle) * distance;
     const z = fromZ + Math.sin(angle) * distance;
-    if (isWalkable(x, z)) return { x, z };
+    if (isWalkableOnLayout(layout, x, z)) return { x, z };
   }
   return { x: fromX, z: fromZ };
 }
@@ -104,7 +97,11 @@ export type VillagerSeed = {
 };
 
 /** Deterministic spawn points and speeds; wandering itself is random per frame. */
-export function createVillagers(seed: number, count: number): VillagerSeed[] {
+export function createVillagers(
+  layout: readonly ClanPlacement[],
+  seed: number,
+  count: number,
+): VillagerSeed[] {
   const random = mulberry32(seed);
   const villagers: VillagerSeed[] = [];
 
@@ -115,7 +112,7 @@ export function createVillagers(seed: number, count: number): VillagerSeed[] {
     for (let attempt = 0; attempt < 200 && !placed; attempt += 1) {
       x = (random() * 2 - 1) * WANDER_HALF;
       z = (random() * 2 - 1) * WANDER_HALF;
-      placed = isWalkable(x, z);
+      placed = isWalkableOnLayout(layout, x, z);
     }
     if (!placed) continue;
 
@@ -130,4 +127,22 @@ export function createVillagers(seed: number, count: number): VillagerSeed[] {
   }
 
   return villagers;
+}
+
+/** @deprecated use buildBlockers(layout) */
+export const BUILDING_BLOCKERS = buildBlockers([]);
+
+/** @deprecated use isWalkableOnLayout */
+export function isWalkable(x: number, z: number): boolean {
+  return isWalkableOnLayout([], x, z);
+}
+
+/** @deprecated use pickWanderTargetOnLayout */
+export function pickWanderTarget(
+  random: () => number,
+  fromX: number,
+  fromZ: number,
+  attempts = 24,
+): WanderTarget {
+  return pickWanderTargetOnLayout([], random, fromX, fromZ, attempts);
 }
