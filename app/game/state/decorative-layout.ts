@@ -16,7 +16,12 @@ export type DecorativePrefabId =
   | "GardenCluster"
   | "CropField"
   | "SmallWindmill"
-  | "Well";
+  | "Well"
+  | "StallCorner"
+  | "RockGarden"
+  | "CartHay"
+  | "ArcherTower"
+  | "GoldStore";
 
 export type DecorativePlacement = {
   id: string;
