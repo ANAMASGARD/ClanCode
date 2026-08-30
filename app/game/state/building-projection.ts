@@ -112,7 +112,7 @@ export function buildingStatusFromProjection(
     case "session-lodge":
       return {
         status: view.runId !== null ? "Attached" : "Quiet",
-        detail: view.runId !== null ? `Run ${view.runId.slice(0, 8)}…` : "No session resume UI yet.",
+        detail: view.runId !== null ? `Run ${view.runId.slice(0, 8)}…` : "Open session history for archived runs.",
       };
 
     case "model-shrine":

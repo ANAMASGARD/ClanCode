@@ -28,19 +28,29 @@ export async function relayClanCommand(input: {
   } catch {
     return { status: "rejected", reason: "failed", httpStatus: 503, error: "relay_unconfigured" };
   }
-  const response = await fetch(new URL("/internal/command", origin), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${secret}`,
-    },
-    body: JSON.stringify({
-      clerkUserId: input.clerkUserId,
-      command: input.command,
-      promptPreview: input.promptPreview,
-      mode: input.mode,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(new URL("/internal/command", origin), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify({
+        clerkUserId: input.clerkUserId,
+        command: input.command,
+        promptPreview: input.promptPreview,
+        mode: input.mode,
+      }),
+    });
+  } catch {
+    return {
+      status: "rejected",
+      reason: "failed",
+      httpStatus: 503,
+      error: "relay_unavailable",
+    };
+  }
   let payload: Record<string, unknown> = {};
   try {
     payload = (await response.json()) as Record<string, unknown>;

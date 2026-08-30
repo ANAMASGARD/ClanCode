@@ -225,7 +225,12 @@ export async function handleInternalCommand(
     });
     socket.emit("command", command);
     const result = await ackPromise;
-    if (result.status === "accepted" && result.runId !== undefined && ctx.onAccepted !== undefined) {
+    if (
+      result.status === "accepted" &&
+      result.runId !== undefined &&
+      ctx.onAccepted !== undefined &&
+      command.type === "task.start"
+    ) {
       await ctx.onAccepted({
         clerkUserId: raw.clerkUserId,
         deviceId: command.deviceId,

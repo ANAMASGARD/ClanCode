@@ -247,6 +247,28 @@ describe("clan run projection", () => {
     expect(state.changed).toBe(true);
   });
 
+  test("events from another paired device are ignored while a run is active", () => {
+    let state = seedAcceptedTask(emptyClanRunSnapshot(), {
+      runId: "run-1",
+      deviceId: "dev-primary",
+      requestedMode: "build",
+      promptPreview: "edit",
+    });
+    state = applyRunEvent(state, event("run.started", 1, {}, "run-1"), "dev-primary");
+    const hijacked = applyRunEvent(
+      state,
+      event("run.started", 1, {}, "run-other"),
+      "dev-secondary",
+    );
+    expect(hijacked).toEqual(state);
+    const progressed = applyRunEvent(
+      state,
+      event("tool.requested", 2, { name: "grep" }, "run-other"),
+      "dev-secondary",
+    );
+    expect(progressed).toEqual(state);
+  });
+
   test("cancelled run clears approvals and returns to idle delivery", () => {
     let state = seedAcceptedTask(emptyClanRunSnapshot(), {
       runId: "run-1",

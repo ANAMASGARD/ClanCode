@@ -510,6 +510,185 @@ body {
   box-shadow: 2px 2px 0 0 var(--clan-border);
 }
 
+.clan-delete-action {
+  min-height: 44px;
+  margin-top: 10px;
+  border: 3px solid var(--clan-border);
+  border-radius: 10px;
+  background: #ff5c5c;
+  color: #fff;
+  font-weight: 800;
+  box-shadow: 3px 3px 0 0 var(--clan-border);
+}
+
+.clan-delete-action:hover:not(:disabled) {
+  background: #ff3b3b;
+}
+
+.clan-delete-action:disabled {
+  opacity: 0.5;
+}
+
+.clan-session-log-panel {
+  position: fixed;
+  top: 88px;
+  right: 18px;
+  z-index: 30;
+  width: min(420px, calc(100vw - 96px));
+  max-height: min(72vh, 640px);
+  overflow: auto;
+  padding: 16px;
+  border: 4px solid var(--clan-border);
+  border-radius: 14px;
+  background: var(--clan-panel);
+  box-shadow: 6px 6px 0 0 var(--clan-border);
+}
+
+.clan-session-log-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.clan-session-log-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.clan-session-log-row {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 3px solid var(--clan-border);
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.clan-session-log-row strong {
+  font-size: 13px;
+  color: #111;
+}
+
+.clan-session-log-row span {
+  font-size: 11px;
+  color: #3d3528;
+  font-weight: 700;
+}
+
+.clan-session-log-detail {
+  margin: 6px 0 4px;
+  padding: 10px 12px 12px;
+  border: 2px dashed var(--clan-border);
+  border-radius: 10px;
+  background: #fffdf4;
+}
+
+.clan-session-log-activity {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.clan-session-log-activity li {
+  font-size: 11px;
+  line-height: 1.45;
+  font-weight: 700;
+  color: #3d3528;
+}
+
+.clan-session-log-activity li[data-kind="user"] {
+  color: #111;
+}
+
+.clan-removed-tray {
+  position: fixed;
+  left: 88px;
+  bottom: 24px;
+  z-index: 12;
+  width: min(320px, calc(100vw - 120px));
+  padding: 14px 16px;
+  border: 3px solid var(--clan-border);
+  border-radius: 12px;
+  background: rgba(255, 248, 220, 0.96);
+  box-shadow: 4px 4px 0 0 var(--clan-border);
+}
+
+.clan-removed-tray strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.clan-removed-tray ul {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.clan-removed-tray li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 2px solid var(--clan-border);
+  padding-top: 8px;
+}
+
+.clan-removed-tray li span {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #111;
+}
+
+.clan-removed-tray li small {
+  font-size: 10px;
+  font-weight: 700;
+  color: #3d3528;
+}
+
+.clan-readd-action {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 2px solid var(--clan-border);
+  border-radius: 8px;
+  background: #7bc96f;
+  color: #111;
+  font-size: 11px;
+  font-weight: 800;
+  box-shadow: 2px 2px 0 0 var(--clan-border);
+  white-space: nowrap;
+}
+
+.clan-readd-action:hover:not(:disabled) {
+  background: #95d88a;
+}
+
+.clan-readd-action:disabled {
+  opacity: 0.5;
+}
+
+.clan-context-panel .clan-secondary-action,
+.clan-context-panel .clan-delete-action {
+  width: 100%;
+}
+
 .clan-cancel-action {
   min-height: 44px;
   border: 3px solid var(--clan-border);

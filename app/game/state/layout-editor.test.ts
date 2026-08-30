@@ -8,6 +8,7 @@ import {
   mergeSavedLayout,
   movePlacement,
   removePlacement,
+  restorePlacement,
   validateLayout,
 } from "@/app/game/state/layout-editor";
 
@@ -28,8 +29,26 @@ describe("layout editor", () => {
     expect(removed?.some((p) => p.id === "test-barracks")).toBe(false);
   });
 
-  test("cannot remove semantic buildings", () => {
-    expect(removePlacement(DEFAULT_SEED_LAYOUT, "session-lodge")).toBeNull();
+  test("can remove optional semantic buildings", () => {
+    const removed = removePlacement(DEFAULT_SEED_LAYOUT, "session-lodge");
+    expect(removed?.some((p) => p.kind === "semantic" && p.id === "session-lodge")).toBe(false);
+  });
+
+  test("cannot remove protected semantic buildings", () => {
+    expect(removePlacement(DEFAULT_SEED_LAYOUT, "town-hall")).toBeNull();
+    expect(removePlacement(DEFAULT_SEED_LAYOUT, "builder-workshop")).toBeNull();
+  });
+
+  test("restorePlacement returns a building to its saved tile", () => {
+    const removed = removePlacement(DEFAULT_SEED_LAYOUT, "session-lodge");
+    expect(removed).not.toBeNull();
+    const lodge = DEFAULT_SEED_LAYOUT.find((p) => p.kind === "semantic" && p.id === "session-lodge");
+    expect(lodge).toBeDefined();
+    const restored = restorePlacement(removed!, lodge!);
+    expect(restored?.some((p) => p.kind === "semantic" && p.id === "session-lodge")).toBe(true);
+    const back = restored?.find((p) => p.kind === "semantic" && p.id === "session-lodge");
+    expect(back?.tileX).toBe(lodge?.tileX);
+    expect(back?.tileZ).toBe(lodge?.tileZ);
   });
 
   test("movePlacement relocates a movable building onto an empty tile", () => {

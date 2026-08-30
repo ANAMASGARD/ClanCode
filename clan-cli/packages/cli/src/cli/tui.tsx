@@ -94,8 +94,9 @@ export function ChatApp(props: Props) {
           at: new Date().toISOString(),
         })),
       });
-    } catch {
-      return undefined;
+    } catch (error) {
+      console.error("[clan-cli:archive-transcript]", error);
+      throw error;
     }
   }
 
@@ -174,7 +175,15 @@ export function ChatApp(props: Props) {
         ]);
       }
       if (event.type === "run.cancelled") {
-        void archiveCurrentTranscript(supervisor);
+        void archiveCurrentTranscript(supervisor).catch(() => {
+          setLines((current) => [
+            ...current,
+            {
+              kind: "system",
+              text: "Transcript archive failed — see stderr for details.",
+            },
+          ]);
+        });
       }
     });
 
@@ -394,13 +403,20 @@ async function handleSlash(
       }
       return;
     case "/cancel": {
-      const archived = await archiveTranscript?.(supervisor);
+      let archived: string | undefined;
+      let archiveFailed = false;
+      try {
+        archived = await archiveTranscript?.(supervisor);
+      } catch {
+        archiveFailed = true;
+      }
       await supervisor.cancel();
       setLines([
         {
           kind: "system",
-          text:
-            archived !== undefined
+          text: archiveFailed
+            ? "Run cancelled. Transcript archive failed — see stderr for details."
+            : archived !== undefined
               ? `Run cancelled. Transcript archived to ${archived}`
               : "Run cancelled.",
         },

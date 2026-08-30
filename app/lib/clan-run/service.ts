@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 import type { RunEvent } from "../../../clan-cli/packages/protocol/src/events";
 import { getDb } from "@/app/lib/db";
@@ -219,7 +219,7 @@ export async function applyProjectedRunEvent(input: {
       ...current,
       deviceId: current.deviceId ?? input.deviceId,
     };
-    const next = applyRunEvent(withDevice, input.event);
+    const next = applyRunEvent(withDevice, input.event, input.deviceId);
     await saveSnapshot(input.clerkUserId, next);
     return next;
   });
@@ -301,4 +301,14 @@ export async function resetRunProjection(input: {
     await saveSnapshot(input.clerkUserId, next);
     return next;
   });
+}
+
+export async function listSessionLogs(clerkUserId: string, limit = 40) {
+  const db = getDb();
+  return await db
+    .select()
+    .from(clanRunSessionLogs)
+    .where(eq(clanRunSessionLogs.clerkUserId, clerkUserId))
+    .orderBy(desc(clanRunSessionLogs.archivedAt))
+    .limit(limit);
 }

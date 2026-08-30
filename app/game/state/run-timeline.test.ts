@@ -31,4 +31,32 @@ describe("clan run timeline", () => {
     expect(steps.find((step) => step.id === "deliver")?.state).toBe("active");
     expect(steps.find((step) => step.id === "done")?.state).toBe("pending");
   });
+
+  test("failed validation marks VALIDATE failed and keeps earlier stages done", () => {
+    const steps = clanRunTimeline({
+      ...emptyClanRunSnapshot(),
+      runId: "run-1",
+      phase: "failed",
+      validationStatus: "failed",
+      requestedMode: "build",
+      changed: true,
+    });
+    expect(steps.find((step) => step.id === "validate")?.state).toBe("failed");
+    expect(steps.find((step) => step.id === "build")?.state).toBe("done");
+    expect(steps.find((step) => step.id === "request")?.state).toBe("done");
+    expect(steps.find((step) => step.id === "done")?.state).toBe("pending");
+  });
+
+  test("cancelled run marks the active stage failed", () => {
+    const steps = clanRunTimeline({
+      ...emptyClanRunSnapshot(),
+      runId: "run-1",
+      phase: "cancelled",
+      requestedMode: "build",
+      changed: true,
+    });
+    expect(steps.find((step) => step.id === "build")?.state).toBe("failed");
+    expect(steps.find((step) => step.id === "plan")?.state).toBe("done");
+    expect(steps.find((step) => step.id === "done")?.state).toBe("done");
+  });
 });

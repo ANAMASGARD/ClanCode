@@ -66,6 +66,19 @@ export function createRealtimeGateway(deps: RealtimeGatewayDeps): RealtimeGatewa
   const persistAcceptedTask = deps.persistAcceptedTask ?? applyAcceptedTask;
   const persistRunEvent = deps.persistRunEvent ?? applyProjectedRunEvent;
   const relaySecret = deps.relaySecret ?? "";
+  const runEventChains = new Map<string, Promise<void>>();
+
+  function enqueueRunEvent(clerkUserId: string, task: () => Promise<void>): void {
+    const previous = runEventChains.get(clerkUserId) ?? Promise.resolve();
+    const next = previous.then(task, task);
+    runEventChains.set(
+      clerkUserId,
+      next.then(
+        () => undefined,
+        () => undefined,
+      ),
+    );
+  }
 
   function trackSocket(deviceId: string, socket: Socket): void {
     const existing = socketsByDevice.get(deviceId) ?? new Set<Socket>();
@@ -204,17 +217,30 @@ export function createRealtimeGateway(deps: RealtimeGatewayDeps): RealtimeGatewa
             return;
           }
           if (envelope.type === "run.event") {
-            try {
-              const parsed = parseRunEventNetworkPayload(envelope.payload);
-              const projected = projectRunEventForNetwork(parsed);
-              await persistRunEvent({
-                clerkUserId: device.clerkUserId,
-                deviceId,
-                event: projected,
-              });
-            } catch (error) {
-              console.error("[realtime:run.event]", error);
+            const clerkUserId = socket.data.clerkUserId as string | undefined;
+            if (clerkUserId === undefined) {
+              return;
             }
+            enqueueRunEvent(clerkUserId, async () => {
+              const token = String(socket.handshake.auth?.token ?? "");
+              const device = await deps.findDeviceByTokenHash(deps.hashToken(token));
+              if (device === undefined || device.status !== "active") {
+                await disconnectDevice(deviceId, "revoked_or_inactive");
+                return;
+              }
+              try {
+                const parsed = parseRunEventNetworkPayload(envelope.payload);
+                const projected = projectRunEventForNetwork(parsed);
+                await persistRunEvent({
+                  clerkUserId,
+                  deviceId,
+                  event: projected,
+                });
+              } catch (error) {
+                console.error("[realtime:run.event]", error);
+              }
+            });
+            return;
           }
         },
         () => {

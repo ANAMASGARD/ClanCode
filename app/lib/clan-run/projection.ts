@@ -114,7 +114,19 @@ export function seedAcceptedTask(
   };
 }
 
-export function applyRunEvent(current: ClanRunSnapshot, event: RunEvent): ClanRunSnapshot {
+export function applyRunEvent(
+  current: ClanRunSnapshot,
+  event: RunEvent,
+  emittingDeviceId?: string,
+): ClanRunSnapshot {
+  if (
+    emittingDeviceId !== undefined &&
+    current.deviceId !== null &&
+    current.deviceId !== emittingDeviceId &&
+    current.runId !== null
+  ) {
+    return current;
+  }
   if (current.runId !== null && event.runId !== current.runId && event.type !== "run.started") {
     return current;
   }
@@ -258,7 +270,7 @@ export function applyRunEvent(current: ClanRunSnapshot, event: RunEvent): ClanRu
 }
 
 export function applyRunEvents(current: ClanRunSnapshot, events: readonly RunEvent[]): ClanRunSnapshot {
-  return events.reduce(applyRunEvent, current);
+  return events.reduce((state, event) => applyRunEvent(state, event), current);
 }
 
 export { emptyClanRunSnapshot };

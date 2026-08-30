@@ -67,8 +67,27 @@ export async function POST(request: Request) {
           payload: { runId },
         }),
       });
-      if (result.status === "accepted") {
+      if (result.error === "relay_unavailable" || result.error === "relay_unconfigured") {
+        return NextResponse.json({ error: result.error }, { status: 503 });
+      }
+      if (result.httpStatus >= 500 && result.error !== "device_offline") {
+        return NextResponse.json(
+          { error: result.error ?? "relay_failed" },
+          { status: result.httpStatus },
+        );
+      }
+      if (result.error === "device_offline") {
+        // Harness offline — safe to clear stale projection without remote cancel.
+      } else if (result.status === "accepted") {
         await applyCancelledRun(userId, runId);
+      } else {
+        return NextResponse.json(
+          {
+            error: result.reason ?? "cancel_rejected",
+            status: result.status,
+          },
+          { status: result.httpStatus >= 400 ? result.httpStatus : 409 },
+        );
       }
     }
 

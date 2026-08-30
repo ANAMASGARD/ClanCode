@@ -117,6 +117,34 @@ describe("internal command relay", () => {
     expect(result.status).toBe(503);
   });
 
+  test("cancel command does not seed projection", async () => {
+    const socket = await connect();
+    await Bun.sleep(30);
+    const envelope = {
+      ...command(),
+      type: "task.cancel" as const,
+      payload: { runId: "run-active" },
+    };
+    socket.on("command", (payload: { commandId?: string }) => {
+      socket.emit("event", {
+        version: 1,
+        eventId: crypto.randomUUID(),
+        deviceId,
+        issuedAt: new Date().toISOString(),
+        type: "command.ack",
+        payload: { commandId: payload.commandId, status: "accepted", runId: "run-active" },
+      });
+    });
+    const result = await post(
+      { clerkUserId: "user-1", command: envelope },
+      `Bearer ${secret}`,
+    );
+    expect(result.status).toBe(200);
+    expect(result.json.status).toBe("accepted");
+    expect(accepted).toEqual([]);
+    socket.disconnect();
+  });
+
   test("accepted ACK returns runId and seeds projection", async () => {
     const socket = await connect();
     await Bun.sleep(30);

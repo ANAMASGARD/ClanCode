@@ -33,14 +33,71 @@ function mark(state: TimelineStepState, id: TimelineStepId): TimelineStep {
   return { id, label: LABELS[id], state };
 }
 
+function stepIndex(id: TimelineStepId): number {
+  return TIMELINE_STEPS.indexOf(id);
+}
+
+function inferTerminalStep(snapshot: ClanRunSnapshot): TimelineStepId {
+  if (snapshot.phase === "cancelled") {
+    if (snapshot.changed) {
+      return "build";
+    }
+    if (snapshot.runId !== null) {
+      return "plan";
+    }
+    return "request";
+  }
+  if (snapshot.validationStatus === "failed") {
+    return "validate";
+  }
+  if (snapshot.approvalDecision === "denied") {
+    return "approve";
+  }
+  if (snapshot.deliveryStage === "failed") {
+    return "deliver";
+  }
+  if (snapshot.phase === "awaiting_approval") {
+    return "approve";
+  }
+  if (snapshot.phase === "validating") {
+    return "validate";
+  }
+  if (snapshot.deliveryStage === "committing") {
+    return "deliver";
+  }
+  if (snapshot.phase === "building") {
+    return "build";
+  }
+  if (snapshot.phase === "planning") {
+    return "plan";
+  }
+  return "request";
+}
+
+function terminalTimeline(snapshot: ClanRunSnapshot): TimelineStep[] {
+  const failedAt = inferTerminalStep(snapshot);
+  const failIndex = stepIndex(failedAt);
+  return TIMELINE_STEPS.map((id) => {
+    const idx = stepIndex(id);
+    if (idx < failIndex) {
+      return mark("done", id);
+    }
+    if (idx === failIndex) {
+      return mark("failed", id);
+    }
+    if (id === "done" && snapshot.phase === "cancelled") {
+      return mark("done", id);
+    }
+    return mark("pending", id);
+  });
+}
+
 export function clanRunTimeline(snapshot: ClanRunSnapshot): TimelineStep[] {
   if (snapshot.phase === "idle" && snapshot.runId === null) {
     return TIMELINE_STEPS.map((id) => mark("pending", id));
   }
   if (snapshot.phase === "failed" || snapshot.phase === "cancelled") {
-    return TIMELINE_STEPS.map((id) =>
-      mark(id === "done" ? "failed" : snapshot.runId !== null && id === "request" ? "done" : "pending", id),
-    );
+    return terminalTimeline(snapshot);
   }
 
   const steps: TimelineStep[] = [];

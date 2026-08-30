@@ -34,6 +34,8 @@ Island builders, Approval Gate, PR Courier, and Builder Workshop construction si
 | **Restart harness** — archives activity, cancels stale run, resets projection to idle | ✅ |
 | Stale-run detection (`planning` + `task.start` + `lastSequence === 0`) with user hint | ✅ |
 | Clickable PR links in web activity panel | ✅ |
+| **Delete building** — click island decoration or optional semantic building → red Delete in side panel | ✅ |
+| **Session history popup** — ◫ rail or Session Lodge → archived runs + chat/activity lines | ✅ |
 | Construction site at workshop (3D scaffolding, no DOM overlay) | ✅ |
 | Workshop +1 storey only for unique successful **Build** with `changed` and validation passed/skipped (cap 4) | ✅ |
 | Layout edit (✥) enabled during runs; decorative remove-on-click in edit mode | ✅ |
@@ -46,7 +48,10 @@ When a run is **restarted**, **cancelled**, or `/new` in the CLI:
 - **Web (Neon):** `clan_run_session_logs` — archived activity lines + run metadata (`drizzle/0003_clan_run_session_logs.sql`, index in `0004`).
 - **CLI (local):** `$XDG_STATE_HOME/clancode/session-logs/*.json` — full TUI transcript via `archiveRunLog()`.
 
-API: `POST /api/clan/run/reset` — tries cancel, archives activity payload, calls `resetRunProjection()`.
+API: `POST /api/clan/run/reset` — tries cancel, archives activity payload, calls `resetRunProjection()`.  
+API: `GET /api/clan/session-logs` — lists archived sessions for the signed-in user (newest first).
+
+Protected semantic buildings (cannot delete): Clan Castle, Approval Gate, Builder Workshop, Validation Forge, Test Camp.
 
 ### CLI transcript improvements
 

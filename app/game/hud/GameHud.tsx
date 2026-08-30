@@ -8,11 +8,15 @@ import { useState } from "react";
 import type { ClanRunView } from "@/app/lib/clan-run/types";
 import { useDevicePresence } from "@/app/game/hooks/useDevicePresence";
 import { ClanCommandChat } from "@/app/game/hud/ClanCommandDock";
+import { SessionLogPanel } from "@/app/game/hud/SessionLogPanel";
+import { useSessionLogs } from "@/app/game/hooks/useSessionLogs";
+import { RemovedBuildingsTray } from "@/app/game/hud/RemovedBuildingsTray";
 import { harnessPresenceLabel } from "@/app/game/hud/harness-presence-label";
 import { buildingStatusFromProjection } from "@/app/game/state/building-projection";
 import type { ClanPlacement } from "@/app/game/state/clan-layout";
+import { canRemovePlacement, canRemoveSemanticBuilding } from "@/app/game/state/clan-layout";
 import type { SemanticBuilding } from "@/app/game/state/default-layout";
-import { findShopItem } from "@/app/game/state/placable-catalog";
+import { placementLabel } from "@/app/game/state/placement-label";
 
 type GameHudProps = {
   buildings: readonly SemanticBuilding[];
@@ -24,6 +28,10 @@ type GameHudProps = {
   runView: ClanRunView;
   selectedPlacement?: ClanPlacement | null;
   onRemovePlacement?: () => void;
+  onDeleteBuilding?: (buildingId: SemanticBuilding["id"]) => void;
+  removedPlacements?: ClanPlacement[];
+  layoutBusy?: boolean;
+  onRestorePlacement?: (placementId: string) => void;
   onHome: () => void;
   onAudio: () => void;
   onInteract: () => void;
@@ -43,6 +51,10 @@ export function GameHud({
   runView,
   selectedPlacement = null,
   onRemovePlacement,
+  onDeleteBuilding,
+  removedPlacements = [],
+  layoutBusy = false,
+  onRestorePlacement,
   onHome,
   onAudio,
   onInteract,
@@ -53,6 +65,8 @@ export function GameHud({
 }: GameHudProps) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [buildingsOpen, setBuildingsOpen] = useState(false);
+  const [sessionLogOpen, setSessionLogOpen] = useState(false);
+  const sessionLogs = useSessionLogs();
   const { user, isLoaded } = useUser();
   const castleSelected = selected?.id === "town-hall";
   const presence = useDevicePresence(castleSelected);
@@ -61,6 +75,19 @@ export function GameHud({
   const islandLabel = isLoaded
     ? (user?.firstName ?? user?.username ?? user?.fullName ?? "Island")
     : "Island";
+  const openSessionLog = () => {
+    onInteract();
+    void sessionLogs.refresh();
+    setSessionLogOpen(true);
+  };
+
+  const toggleSessionLog = () => {
+    onInteract();
+    if (!sessionLogOpen) {
+      void sessionLogs.refresh();
+    }
+    setSessionLogOpen((open) => !open);
+  };
 
   const showCastleChat = castleSelected && !editMode;
 
@@ -109,7 +136,12 @@ export function GameHud({
           }}
         >⌘</button>
         <Link href="/dashboard/devices" className="clan-hud-button" aria-label="Devices" onClick={onInteract}>⌁</Link>
-        <HudButton label="Sessions (coming soon)" onClick={onInteract} icon="◫" />
+        <HudButton
+          label="Session history"
+          active={sessionLogOpen}
+          onClick={toggleSessionLog}
+          icon="◫"
+        />
         <HudButton label="Models (coming soon)" onClick={onInteract} icon="◇" />
         <button
           type="button"
@@ -198,10 +230,28 @@ export function GameHud({
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 20 }}
           >
-            <BuildingStatusCard building={selected} runView={runView} deviceOnline={deviceOnline} />
+            <BuildingStatusCard
+              building={selected}
+              runView={runView}
+              deviceOnline={deviceOnline}
+              runBusy={runBusy}
+              onDelete={onDeleteBuilding}
+              onOpenSessionLog={openSessionLog}
+            />
           </motion.aside>
         ) : null}
       </AnimatePresence>
+
+      <SessionLogPanel
+        open={sessionLogOpen}
+        onClose={() => setSessionLogOpen(false)}
+        logs={sessionLogs.logs}
+        loading={sessionLogs.loading}
+        error={sessionLogs.error}
+        onRefresh={() => {
+          void sessionLogs.refresh();
+        }}
+      />
 
       <AnimatePresence>
         {helpOpen ? (
@@ -212,18 +262,18 @@ export function GameHud({
           </motion.aside>
         ) : null}
       </AnimatePresence>
+
+      <RemovedBuildingsTray
+        removed={removedPlacements}
+        busy={layoutBusy || runBusy}
+        onRestore={(placementId) => onRestorePlacement?.(placementId)}
+      />
     </div>
   );
 }
 
 function placementCardLabel(placement: ClanPlacement): string {
-  if (placement.kind === "decorative") {
-    return findShopItem(`prefab-${placement.prefab}`)?.label ?? placement.prefab;
-  }
-  if (placement.kind === "prop") {
-    return findShopItem(`prop-${placement.assetKey}`)?.label ?? placement.assetKey;
-  }
-  return "Building";
+  return placementLabel(placement);
 }
 
 function PlacementCard({
@@ -235,25 +285,28 @@ function PlacementCard({
   runBusy: boolean;
   onRemove?: () => void;
 }) {
-  if (placement.kind === "semantic") {
-    return null;
-  }
-
+  const removable = canRemovePlacement(placement);
   const label = placementCardLabel(placement);
 
   return (
     <>
       <span className="clan-eyebrow">Island placement</span>
       <h2>{label}</h2>
-      <p>Tap Remove to clear this spot, then open layout edit (✥) to place something new.</p>
-      <button
-        type="button"
-        className="clan-secondary-action"
-        disabled={runBusy}
-        onClick={() => onRemove?.()}
-      >
-        Remove building
-      </button>
+      <p>
+        {removable
+          ? "Remove this building from your island layout."
+          : "This building is fixed on the island."}
+      </p>
+      {removable ? (
+        <button
+          type="button"
+          className="clan-delete-action"
+          disabled={runBusy}
+          onClick={() => onRemove?.()}
+        >
+          Delete building
+        </button>
+      ) : null}
     </>
   );
 }
@@ -262,15 +315,22 @@ function BuildingStatusCard({
   building,
   runView,
   deviceOnline,
+  runBusy,
+  onDelete,
+  onOpenSessionLog,
 }: {
   building: SemanticBuilding;
   runView: ClanRunView;
   deviceOnline: boolean;
+  runBusy: boolean;
+  onDelete?: (buildingId: SemanticBuilding["id"]) => void;
+  onOpenSessionLog?: () => void;
 }) {
   const projection = buildingStatusFromProjection(building.id, {
     ...runView,
     deviceOnline,
   });
+  const removable = canRemoveSemanticBuilding(building.id);
 
   return (
     <>
@@ -286,6 +346,21 @@ function BuildingStatusCard({
         <p className="clan-chat-note">
           Workshop floors ({String(runView.storeys)}) grow after validated builds. Use ✥ layout edit to move island decorations.
         </p>
+      ) : null}
+      {building.id === "session-lodge" ? (
+        <button type="button" className="clan-secondary-action" onClick={() => onOpenSessionLog?.()}>
+          Open session history
+        </button>
+      ) : null}
+      {removable ? (
+        <button
+          type="button"
+          className="clan-delete-action"
+          disabled={runBusy}
+          onClick={() => onDelete?.(building.id)}
+        >
+          Delete building
+        </button>
       ) : null}
     </>
   );

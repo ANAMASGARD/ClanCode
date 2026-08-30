@@ -21,7 +21,6 @@ import {
   createDecorativePlacement,
   createPropPlacement,
   movePlacement,
-  removePlacement,
 } from "./state/layout-editor";
 import { findShopItem, type PlacableShopItem } from "./state/placable-catalog";
 import { isClanRunBusy } from "@/app/lib/clan-run/types";
@@ -136,10 +135,11 @@ export function ClanGame() {
 
   const handleRemove = () => {
     if (!selectedPlacementId) return;
-    layoutState.setDraft((current) => removePlacement(current, selectedPlacementId) ?? current);
-    setSelectedPlacementId(null);
-    setReplaceHint(true);
-    setShopOpen(true);
+    if (layoutState.removeFromDraft(selectedPlacementId)) {
+      setSelectedPlacementId(null);
+      setReplaceHint(true);
+      setShopOpen(true);
+    }
   };
 
   const handleArmShopItem = (item: PlacableShopItem) => {
@@ -229,6 +229,19 @@ export function ClanGame() {
         selectedPlacement={selectedPlacement}
         onRemovePlacement={() => {
           void handleRemoveSelectedPlacement();
+        }}
+        onDeleteBuilding={(buildingId) => {
+          void layoutState.removeAndSave(buildingId).then((removed) => {
+            if (removed) {
+              setSelected(null);
+              setSelectedPlacementId(null);
+            }
+          });
+        }}
+        removedPlacements={layoutState.removedPlacements}
+        layoutBusy={layoutState.saving}
+        onRestorePlacement={(placementId) => {
+          void layoutState.restorePlacement(placementId);
         }}
         onHome={reset}
         onAudio={toggleMuted}
