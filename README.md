@@ -22,6 +22,8 @@ Local-first AI coding harness: a **Next.js control plane** pairs with the **`cla
 
 > Requires **[Bun](https://bun.sh) ≥ 1.4**, **Node ≥ 22.14**, **Git**, and a **TrueForge** model. `npm install -g` does **not** install Bun.
 
+**npm:** [@clancode/cli](https://www.npmjs.com/package/@clancode/cli) (`@next` = beta)
+
 ```bash
 npm install -g @clancode/cli@next
 # or: bun add -g @clancode/cli@next

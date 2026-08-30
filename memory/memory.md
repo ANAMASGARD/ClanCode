@@ -270,7 +270,7 @@ Production Socket.IO host is **decision later** (local Bun `:3001` for developme
 
 1. **Task composer → `task.start` → RunEvents in browser → approval UI → PR result**
 2. Neon domain tables (repositories, tasks, runs, run_events, approvals)
-3. npm registry publish
+3. ~~npm registry publish~~ — **done** (`@clancode/cli@0.1.0-beta.1` on `@next`, 2026-08-31)
 
 ---
 

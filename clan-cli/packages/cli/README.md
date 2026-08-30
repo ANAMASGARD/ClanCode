@@ -6,7 +6,8 @@ Local-first **TrueForge**-supervised AI coding harness for your laptop.
 
 ClanCode **wraps TrueForge** — it does not replace the agent runtime. The CLI owns repository authorization, isolated worktrees, local tools, human approvals, validation, Git/PR delivery, and the OpenTUI terminal UI.
 
-> **Beta:** install with the `@next` dist-tag until a stable release is promoted.
+> **Beta:** install with the `@next` dist-tag until a stable release is promoted.  
+> **npm:** https://www.npmjs.com/package/@clancode/cli
 
 ## Requirements
 
