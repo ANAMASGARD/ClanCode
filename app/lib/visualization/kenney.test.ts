@@ -9,6 +9,15 @@ describe("kenneyGlbUrl", () => {
     expect(kenneyGlbUrl("nature", "tree_pineTallA")).toBe(
       "/assets/kenney_nature-kit/Models/GLTF%20format/tree_pineTallA.glb",
     );
+    expect(kenneyGlbUrl("blockyCharacters", "character-a")).toBe(
+      "/assets/kenney_blocky-characters_20/Models/GLB%20format/character-a.glb",
+    );
+    expect(kenneyGlbUrl("castle", "tower-square")).toBe(
+      "/assets/kenney_castle-kit/Models/GLB%20format/tower-square.glb",
+    );
+    expect(kenneyGlbUrl("retroFantasy", "tower-paint")).toBe(
+      "/assets/kenney_retro-fantasy-kit%20(1)/Models/GLB%20format/tower-paint.glb",
+    );
   });
 
   test("rejects traversal and filenames", () => {

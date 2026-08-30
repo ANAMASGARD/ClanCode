@@ -1,6 +1,6 @@
 # Clan Code Visualization Asset Catalog
 
-Last verified: 2026-08-29
+Last verified: 2026-08-30
 
 This catalog is the volatile inventory for the web control-plane visualization.
 It records what is currently present under `public/`; it is not an execution,
@@ -20,16 +20,19 @@ validation, branch, or pull-request state.
 
 ## Kenney kits
 
-All four packs include a `License.txt` identifying the content as Creative
+All Kenney packs include a `License.txt` identifying the content as Creative
 Commons Zero (CC0). The licenses allow personal, educational, and commercial
 use. Crediting Kenney or `www.kenney.nl` is encouraged but not required.
 
 | Pack | Repository path | Inventory observed | Intended visualization role |
 |---|---|---|---|
-| Fantasy Town Kit 2.0 | `public/assets/kenney_fantasy-town-kit_2.0/` | 167 GLBs in `Models/GLB format/`; 30 selected by the game catalog | Primary village construction set: walls, roofs, doors, stairs, trees, stalls, fountains, rocks, windmill, and watermill pieces. Map repositories, modules, or services to buildings only through domain state. |
-| Nature Kit 2.1 | `public/assets/kenney_nature-kit/` | 329 GLBs in `Models/GLTF format/`; 34 selected by the game catalog | Island terrain and dressing: river tiles, cliffs, trees, pines, rocks, plants, crops, and statues. It represents environment and atmosphere, not product state. |
-| Pirate Kit 2.1 | `public/assets/kenney_pirate-kit/` | 72 GLBs in `Models/GLB format/`; 14 selected by the game catalog | Coastal and delivery landmarks: ships, docks, towers, castle pieces, flags, crates, cannons, and chests. A ship, chest, or flag may visualize delivery/PR state only when backed by a real artifact. |
-| Survival Kit 2.0 | `public/assets/kenney_survival-kit/` | 80 GLBs in `Models/GLB format/`; 14 selected by the game catalog | Work-site props: tents, workbenches, tools, campfires, resources, fences, and storage. These may visualize active task or agent work, but animations remain decorative. |
+| Fantasy Town Kit 2.0 | `public/assets/kenney_fantasy-town-kit_2.0/` | 167 GLBs in `Models/GLB format/`; 72 selected by the game catalog | Primary village construction set: walls, roofs, doors, stairs, trees, stalls, fountains, rocks, windmill, and watermill pieces. Map repositories, modules, or services to buildings only through domain state. |
+| Nature Kit 2.1 | `public/assets/kenney_nature-kit/` | 329 GLBs in `Models/GLTF format/`; 121 selected by the game catalog | Island terrain and dressing: flat plot layers, river tiles, cliffs, round-tree canopy, shoreline rocks/stones, waterfalls, paths, and plants. Environment only — not product state. |
+| Pirate Kit 2.1 | `public/assets/kenney_pirate-kit/` | 72 GLBs in `Models/GLB format/`; 37 selected by the game catalog | Coastal props retained in catalog for future harbor/build passes; not rendered in the current empty-plot scene. |
+| Survival Kit 2.0 | `public/assets/kenney_survival-kit/` | 80 GLBs in `Models/GLB format/`; 26 selected by the game catalog | Work-site props: tents, workbenches, tools, campfires, resources, fences, and storage. These may visualize active task or agent work, but animations remain decorative. |
+| Castle Kit | `public/assets/kenney_castle-kit/` | 76 GLBs in `Models/GLB format/`; 44 selected by the game catalog | Town Hall is assembled from the kit sample: curtains, gatehouse half-towers, square keeps, inner gabled keep, siege, and pines. |
+| Retro Fantasy Kit | `public/assets/kenney_retro-fantasy-kit (1)/` | 105 GLBs in `Models/GLB format/`; keep towers, teal roofs, and timber props selected | Lived-in stone/timber keep accents. Do not use this kit to ring the plot with curtain walls. |
+| Blocky Characters 2.0 | `public/assets/kenney_blocky-characters_20/` | 18 GLBs in `Models/GLB format/`; all 18 selected by the game catalog | Village inhabitants. Each model ships `static`, `idle`, `walk`, `sprint`, and further clips as node-transform animations (no skins). Characters are ambience only; they never encode run, approval, or agent state. |
 
 ### Common kit layout
 
@@ -102,7 +105,8 @@ truth for execution.
 - The asset folders are present under `public/assets/`.
 - The font files are present under `public/fonts/`.
 - The theme and click files are present under `public/audio/`.
-- The village scene, normalized GLB loader, camera, HUD, and audio controller are wired at `/dashboard`.
+- The live `/dashboard` canvas renders the Clash-style plot with instanced forest canopy, the Kenney stand-in village (Town Hall, 12 semantic buildings, 12 decorative accents, no interior walls), a single beach-facing rampart with a gate, a harbor with a pier and floating ships, and 10 Blocky Characters roaming at random. Still presentation-only.
+- Villager characters come from the Blocky Characters kit and use its bundled `walk`/`idle` GLB animation clips. Character selection, count, and roaming bounds live in `app/game/state/villager-wander.ts`.
 - Physics/edit-mode placement and persistent layout storage are not part of this foundation slice.
 - The Kenney pack trees are intentionally tracked separately from the
   documentation/helper change because they contain a large number of binary

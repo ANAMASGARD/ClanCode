@@ -3,6 +3,9 @@ export const KENNEY_KIT_DIRECTORIES = {
   nature: "kenney_nature-kit",
   pirate: "kenney_pirate-kit",
   survival: "kenney_survival-kit",
+  blockyCharacters: "kenney_blocky-characters_20",
+  castle: "kenney_castle-kit",
+  retroFantasy: "kenney_retro-fantasy-kit (1)",
 } as const;
 
 const MODEL_DIRECTORIES = {
@@ -15,6 +18,9 @@ export const KENNEY_GLB_DIRECTORIES = {
   nature: ["Models", "GLTF format"],
   pirate: ["Models", "GLB format"],
   survival: ["Models", "GLB format"],
+  blockyCharacters: ["Models", "GLB format"],
+  castle: ["Models", "GLB format"],
+  retroFantasy: ["Models", "GLB format"],
 } as const;
 
 const TEXTURE_DIRECTORIES = {

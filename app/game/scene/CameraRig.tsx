@@ -6,12 +6,29 @@ import gsap from "gsap";
 import { useEffect, useRef } from "react";
 import { MOUSE, TOUCH, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import {
+  CAMERA_DEFAULT_ZOOM,
+  CAMERA_MAX_ZOOM,
+  CAMERA_MIN_ZOOM,
+  CAMERA_PAN_HALF_X,
+  CAMERA_PAN_HALF_Z_NEG,
+  CAMERA_PAN_HALF_Z_POS,
+  PLOT_HALF,
+} from "@/app/game/state/island";
 
-const OVERVIEW_POSITION = new Vector3(47, 52, 47);
-const MIN_TARGET = new Vector3(-24, 0, -20);
-const MAX_TARGET = new Vector3(24, 0, 20);
+const OVERVIEW_POSITION = new Vector3(42, 48, 42);
+const MIN_TARGET = new Vector3(-CAMERA_PAN_HALF_X, 0, -CAMERA_PAN_HALF_Z_NEG);
+const MAX_TARGET = new Vector3(CAMERA_PAN_HALF_X, 0, CAMERA_PAN_HALF_Z_POS);
 
-export function CameraRig({ focus, resetToken }: { focus: readonly [number, number, number] | null; resetToken: number }) {
+export function CameraRig({
+  focus,
+  resetToken,
+  editMode = false,
+}: {
+  focus: readonly [number, number, number] | null;
+  resetToken: number;
+  editMode?: boolean;
+}) {
   const controls = useRef<OrbitControlsImpl>(null);
   const camera = useThree((state) => state.camera);
 
@@ -19,7 +36,7 @@ export function CameraRig({ focus, resetToken }: { focus: readonly [number, numb
     const orbit = controls.current;
     if (!orbit) return;
     const target = focus ? new Vector3(...focus) : new Vector3(0, 0, 0);
-    const offset = focus ? new Vector3(24, 27, 24) : OVERVIEW_POSITION.clone();
+    const offset = focus ? new Vector3(18, 22, 18) : OVERVIEW_POSITION.clone();
     const duration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 0.85;
     const cameraTween = gsap.to(camera.position, {
       x: target.x + offset.x,
@@ -51,20 +68,33 @@ export function CameraRig({ focus, resetToken }: { focus: readonly [number, numb
 
   return (
     <>
-      <OrthographicCamera makeDefault position={OVERVIEW_POSITION.toArray()} zoom={22} near={0.1} far={220} />
+      <OrthographicCamera
+        makeDefault
+        position={OVERVIEW_POSITION.toArray()}
+        zoom={CAMERA_DEFAULT_ZOOM}
+        near={0.1}
+        far={260}
+      />
       <OrbitControls
         ref={controls}
         makeDefault
         enableRotate={false}
+        enablePan
         enableDamping
         dampingFactor={0.08}
-        minZoom={12}
-        maxZoom={42}
+        minZoom={CAMERA_MIN_ZOOM}
+        maxZoom={CAMERA_MAX_ZOOM}
         zoomToCursor
         screenSpacePanning={false}
-        mouseButtons={{ LEFT: MOUSE.PAN, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }}
-        touches={{ ONE: TOUCH.PAN, TWO: TOUCH.DOLLY_PAN }}
+        mouseButtons={
+          editMode
+            ? { MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }
+            : { LEFT: MOUSE.PAN, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }
+        }
+        touches={editMode ? { TWO: TOUCH.DOLLY_PAN } : { ONE: TOUCH.PAN, TWO: TOUCH.DOLLY_PAN }}
       />
     </>
   );
 }
+
+export { PLOT_HALF };

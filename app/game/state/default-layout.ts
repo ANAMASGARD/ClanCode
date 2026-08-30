@@ -1,3 +1,6 @@
+import { placementWorldPosition, type ClanPlacement } from "./clan-layout";
+import { SEMANTIC_PLACEMENTS } from "./semantic-layout";
+
 export type SemanticBuildingId =
   | "town-hall"
   | "search-tower"
@@ -21,23 +24,51 @@ export type SemanticBuilding = {
   movable: boolean;
 };
 
-export const DEFAULT_CLAN_LAYOUT = [
-  { id: "town-hall", name: "Town Hall", purpose: "Repository root and clan command", status: "Ready", position: [0, 1.2, 0], movable: true },
-  { id: "search-tower", name: "Search Tower", purpose: "Read, list, grep and glob", status: "Watching", position: [9, 0.9, -7], movable: true },
-  { id: "builder-workshop", name: "Builder Workshop", purpose: "Create, write and patch", status: "Idle", position: [11, 0.9, 7], movable: true },
-  { id: "validation-forge", name: "Validation Forge", purpose: "Tests, typecheck and build", status: "Banked", position: [2, 0.9, 11], movable: true },
-  { id: "session-lodge", name: "Session Lodge", purpose: "Sessions, resume and handoff", status: "Quiet", position: [-8, 0.9, -7], movable: true },
-  { id: "model-shrine", name: "Model Shrine", purpose: "Model selection and agent identity", status: "Attuned", position: [8, 0.9, 1], movable: true },
-  { id: "approval-gate", name: "Approval Gate", purpose: "Human checkpoint for sensitive actions", status: "Closed", position: [-2, 0.9, 15], movable: true },
-  { id: "test-camp", name: "Test Camp", purpose: "Temporary run and worktree activity", status: "Standing by", position: [13, 0.9, 13], movable: true },
-  { id: "market", name: "Tool Market", purpose: "Available tools and capabilities", status: "Open", position: [-7, 0.9, 3], movable: true },
-  { id: "windmill", name: "Windmill", purpose: "Background and idle work", status: "Turning", position: [-13, 0.9, -10], movable: true },
-  { id: "watermill", name: "Event Watermill", purpose: "Structured event processing flow", status: "Flowing", position: [-15, 0.9, 5], movable: false },
-  { id: "farm", name: "Backlog Farm", purpose: "Queued and planned work", status: "Growing", position: [11, 0.9, -14], movable: false },
-] as const satisfies readonly SemanticBuilding[];
+const METADATA: Record<
+  SemanticBuildingId,
+  Omit<SemanticBuilding, "id" | "position">
+> = {
+  "town-hall": { name: "Clan Castle", purpose: "Repository root and clan command", status: "Ready", movable: true },
+  "search-tower": { name: "Search Tower", purpose: "Read, list, grep and glob", status: "Watching", movable: true },
+  "builder-workshop": { name: "Builder Workshop", purpose: "Create, write and patch", status: "Idle", movable: true },
+  "validation-forge": { name: "Validation Forge", purpose: "Tests, typecheck and build", status: "Banked", movable: true },
+  "session-lodge": { name: "Session Lodge", purpose: "Sessions, resume and handoff", status: "Quiet", movable: true },
+  "model-shrine": { name: "Model Shrine", purpose: "Model selection and agent identity", status: "Attuned", movable: true },
+  "approval-gate": { name: "Approval Gate", purpose: "Human checkpoint for sensitive actions", status: "Closed", movable: false },
+  "test-camp": { name: "Test Camp", purpose: "Temporary run and worktree activity", status: "Standing by", movable: true },
+  market: { name: "Tool Market", purpose: "Available tools and capabilities", status: "Open", movable: true },
+  windmill: { name: "Windmill", purpose: "Background and idle work", status: "Turning", movable: true },
+  watermill: { name: "Event Watermill", purpose: "Structured event processing flow", status: "Flowing", movable: false },
+  farm: { name: "Backlog Farm", purpose: "Queued and planned work", status: "Growing", movable: false },
+};
 
-export function getSemanticBuilding(id: SemanticBuildingId): SemanticBuilding {
-  const building = DEFAULT_CLAN_LAYOUT.find((entry) => entry.id === id);
+export const DEFAULT_CLAN_LAYOUT = buildSemanticBuildingsFromLayout(
+  SEMANTIC_PLACEMENTS.map((placement) => ({
+    kind: "semantic" as const,
+    id: placement.id,
+    tileX: placement.tileX,
+    tileZ: placement.tileZ,
+    rotation: placement.rotation,
+  })),
+);
+
+export function buildSemanticBuildingsFromLayout(
+  layout: readonly ClanPlacement[],
+): readonly SemanticBuilding[] {
+  return layout
+    .filter((entry): entry is ClanPlacement & { kind: "semantic" } => entry.kind === "semantic")
+    .map((placement) => ({
+      id: placement.id,
+      ...METADATA[placement.id],
+      position: placementWorldPosition(placement),
+    }));
+}
+
+export function getSemanticBuildingFromLayout(
+  layout: readonly ClanPlacement[],
+  id: SemanticBuildingId,
+): SemanticBuilding {
+  const building = buildSemanticBuildingsFromLayout(layout).find((entry) => entry.id === id);
   if (!building) throw new Error(`Unknown semantic building: ${id}`);
   return building;
 }

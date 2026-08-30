@@ -8,6 +8,13 @@
       "when": 1787994260055,
       "tag": "0000_smooth_sasquatch",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788078000000,
+      "tag": "0001_clan_layouts",
+      "breakpoints": true
     }
   ]
 }
