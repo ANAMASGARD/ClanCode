@@ -114,7 +114,7 @@ Judge-ready docs at repo root and `docs/`:
 
 Demo video: https://youtu.be/istUU5onLCI
 
-`@clancode/cli@0.1.0-beta.1` published on npm under dist-tag **`next`**. Install: `npm install -g @clancode/cli@next`.
+`@clancode/cli@0.1.0-beta.1` **ready to publish** on npm under dist-tag **`next`** (AGPL-3.0, `publishConfig.access: public`). Publish requires npm 2FA OTP from maintainer. After publish: `npm install -g @clancode/cli@next`.
 
 ### Validation (2026-08-30)
 
