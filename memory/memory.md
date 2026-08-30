@@ -1,6 +1,6 @@
 # ClanCode — Project Memory
 
-**Last updated:** 2026-08-30 (Castle Kit Sample.png keep, standing windmills, layout editor)
+**Last updated:** 2026-08-30 (Search Tower beam + Fantasy Town village set)
 
 ## What This Repo Is
 
@@ -198,6 +198,21 @@ Town Hall is assembled in `app/game/prefabs/TownHall.tsx` from **Kenney Castle K
 
 **Do not** restore KayKit Medieval Hexagon / Adventurers. Those packs were tried, then deleted: Windows texture paths and GLB padding broke Three.js (`Couldn't load texture {}`). The island is Kenney-only.
 
+### Search Tower (semantic)
+
+Castle Kit hexagon stack at `(0, -8)` — **unchanged silhouette**, corrected module heights (base `1.31`, mid `0.46`, roof `0.83`). GSAP **Y-axis rotating search beam** via `useContinuousRotation`: warm `spotLight` + translucent cone mesh. Static glow when `reducedMotion` is on. Presentation only — does not reflect real search/run state.
+
+### Fantasy Town village set (decorative)
+
+Grass-ring cottages and plaza props from `kenney_fantasy-town-kit_2.0/Sample.png` (castle **not** touched):
+
+- **Red-roof cottage** — `VillageHouseA` / `Cottage`: compact stone/timber, `roof-gable`, chimney, red banner.
+- **Teal-roof house** — `VillageHouseD` / `Bakery`: two-storey stone + timber, `roof-high`, green banner/stall accent.
+- **Plaza** — `Well` fountain with benches/stools; `MarketCluster` red+green stalls, picnic seating, cart; `StallCorner` north pocket; `CartHay` loaded carts on open grass.
+- Default decorative seed adds `Cottage` at `(-8, 10)` and `Bakery` at `(8, 10)` on the south ring.
+
+**Deferred:** villager sit / enter-house / shopkeeper / cart-follow story loops (wander-only for now).
+
 ### Standing windmills
 
 Kit `windmill.glb` is a **sail disc** (AABB ~0.47×3.11×3.11), not a tower. Do not use it as the mill body.
@@ -234,7 +249,7 @@ Kits on disk: Fantasy Town, Nature, Pirate, Survival, Castle (`public/assets/ken
 | `bun run game:assets:check` | 351 verified GLBs |
 | `bun run test:game` | 57 pass |
 | `bun run test:clan-layout` | 16 pass |
-| Browser `/dashboard` | pending signed-in Clerk session (keep vs `Sample.png`) |
+| Browser `/dashboard` | pending signed-in Clerk session (Search Tower beam + village set) |
 
 **Canopy density (full quality, seed `CANOPY_SEED`):** ~2,064 instanced trees + ~145 Fantasy kit rocks; zero trees on the gridded plot (`PLOT_EXCLUSION_HALF = 24.2`).
 

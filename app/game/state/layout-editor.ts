@@ -1,6 +1,6 @@
 import type { GameAssetKey } from "@/app/game/assets/catalog";
 import { GAME_ASSETS } from "@/app/game/assets/catalog";
-import { SEMANTIC_PREFABS } from "@/app/game/prefabs/registry";
+import { DECORATIVE_PREFABS, SEMANTIC_PREFABS } from "@/app/game/prefabs/registry";
 import type { DecorativePrefabId } from "./decorative-layout";
 import {
   DEFAULT_SEED_LAYOUT,
@@ -81,6 +81,10 @@ export function validateLayout(layout: ClanPlacement[]): PlacementValidation {
 
     if (placement.kind === "prop" && !GAME_ASSETS[placement.assetKey]) {
       return { valid: false, reason: `Unknown asset ${placement.assetKey}` };
+    }
+
+    if (placement.kind === "decorative" && !DECORATIVE_PREFABS[placement.prefab]) {
+      return { valid: false, reason: `Unknown prefab ${placement.prefab}` };
     }
 
     if (PROTECTED_ROAD_SLOTS.has(slot)) {

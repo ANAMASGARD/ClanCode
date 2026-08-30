@@ -1,15 +1,62 @@
 "use client";
 
+import { useRef } from "react";
+import { DoubleSide, Group } from "three";
 import { AssetModel } from "@/app/game/scene/AssetModel";
+import { useContinuousRotation } from "./useContinuousRotation";
 
-/** Compact Castle Kit archer tower — not the oversized pirate keep. */
-export function SearchTower() {
+/** Kenney Castle Kit hexagon module stack heights (world units). */
+const HEX_BASE_Y = 1.31;
+const HEX_MID_Y = 0.46;
+const HEX_ROOF_Y = 0.83;
+const BEAM_HEIGHT = HEX_BASE_Y + HEX_MID_Y + HEX_ROOF_Y + 0.08;
+
+function SearchBeam({ reducedMotion = false }: { reducedMotion?: boolean }) {
+  const beamRef = useRef<Group>(null);
+  useContinuousRotation(beamRef, reducedMotion, 6, "y");
+
+  return (
+    <group position={[0, BEAM_HEIGHT, 0]}>
+      <group ref={beamRef}>
+        <spotLight
+          color="#fff4cc"
+          intensity={reducedMotion ? 4 : 9}
+          distance={18}
+          angle={0.28}
+          penumbra={0.45}
+          position={[0, 0.15, 0]}
+          rotation={[Math.PI / 2, 0, 0]}
+        />
+        <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, 1.8]}>
+          <coneGeometry args={[0.55, 3.6, 16, 1, true]} />
+          <meshStandardMaterial
+            color="#ffe9a8"
+            emissive="#ffcc66"
+            emissiveIntensity={0.35}
+            transparent
+            opacity={0.22}
+            side={DoubleSide}
+            depthWrite={false}
+          />
+        </mesh>
+      </group>
+      <pointLight color="#a8d4ff" intensity={3} distance={6} position={[0, 0.2, 0]} />
+    </group>
+  );
+}
+
+/** Castle Kit hexagon lookout with a GSAP rotating search beam (presentation only). */
+export function SearchTower({ reducedMotion = false }: { reducedMotion?: boolean }) {
+  const midY = HEX_BASE_Y;
+  const roofY = HEX_BASE_Y + HEX_MID_Y;
+
   return (
     <group>
       <AssetModel assetKey="castle.towerHexagonBase" />
-      <AssetModel assetKey="castle.towerHexagonMid" position={[0, 1.05, 0]} />
-      <AssetModel assetKey="castle.towerHexagonRoof" position={[0, 2.1, 0]} />
-      <AssetModel assetKey="castle.flagPennant" position={[0, 2.85, 0]} scale={0.8} />
+      <AssetModel assetKey="castle.towerHexagonMid" position={[0, midY, 0]} />
+      <AssetModel assetKey="castle.towerHexagonRoof" position={[0, roofY, 0]} />
+      <AssetModel assetKey="castle.flagPennant" position={[0, roofY + HEX_ROOF_Y + 0.15, 0]} scale={0.8} />
+      <SearchBeam reducedMotion={reducedMotion} />
     </group>
   );
 }

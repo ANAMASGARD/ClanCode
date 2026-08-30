@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { DEFAULT_SEED_LAYOUT } from "@/app/game/state/clan-layout";
+import type { DecorativePrefabId } from "@/app/game/state/decorative-layout";
 import {
   addPlacement,
   canPlaceAt,
@@ -58,6 +59,15 @@ describe("layout editor", () => {
     expect(moved).not.toBeNull();
     const merged = mergeSavedLayout(moved!);
     expect(merged.some((p) => p.kind === "semantic" && p.id === "session-lodge" && p.tileX === -9)).toBe(true);
+  });
+
+  test("rejects unknown decorative prefabs", () => {
+    const invalid = DEFAULT_SEED_LAYOUT.map((placement) =>
+      placement.kind === "decorative"
+        ? { ...placement, prefab: "NotARealPrefab" as DecorativePrefabId }
+        : placement,
+    );
+    expect(validateLayout(invalid).valid).toBe(false);
   });
 
   test("mergeSavedLayout replaces layouts crowded against the keep", () => {

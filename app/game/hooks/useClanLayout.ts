@@ -89,7 +89,7 @@ export function useClanLayout(): ClanLayoutState {
       if (generation !== persistGeneration.current) return;
       skipAutosave.current = true;
       setSavedLayout(merged);
-      setDraftState(merged);
+      setDraftState((current) => (sameLayout(current, placements) ? merged : current));
     } catch (cause) {
       if (generation !== persistGeneration.current) return;
       setError(cause instanceof Error ? cause.message : "Save failed");
@@ -121,13 +121,32 @@ export function useClanLayout(): ClanLayoutState {
     [],
   );
 
-  const done = useCallback(() => {
-    if (!sameLayout(draft, savedLayout)) {
-      void persist(draft);
+  const done = useCallback(async () => {
+    if (sameLayout(draft, savedLayout)) {
+      setEditMode(false);
+      setError(null);
+      return;
     }
-    setEditMode(false);
+
+    const generation = ++persistGeneration.current;
+    setSaving(true);
     setError(null);
-  }, [draft, persist, savedLayout]);
+    try {
+      const merged = await putLayout(draft);
+      if (generation !== persistGeneration.current) return;
+      skipAutosave.current = true;
+      setSavedLayout(merged);
+      setDraftState(merged);
+      setEditMode(false);
+    } catch (cause) {
+      if (generation !== persistGeneration.current) return;
+      setError(cause instanceof Error ? cause.message : "Save failed");
+    } finally {
+      if (generation === persistGeneration.current) {
+        setSaving(false);
+      }
+    }
+  }, [draft, savedLayout]);
 
   return {
     layout: editMode ? draft : savedLayout,

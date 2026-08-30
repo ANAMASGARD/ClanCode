@@ -41,6 +41,8 @@ export const DECORATIVE_PLACEMENTS: DecorativePlacement[] = [
 
   { id: "house-nw", prefab: "VillageHouseA", tileX: -8, tileZ: -10 },
   { id: "house-ne", prefab: "VillageHouseD", tileX: 8, tileZ: -10, rotation: Math.PI },
+  { id: "cottage-sw", prefab: "Cottage", tileX: -8, tileZ: 10 },
+  { id: "bakery-se", prefab: "Bakery", tileX: 8, tileZ: 10 },
   { id: "well-w", prefab: "Well", tileX: -10, tileZ: 2 },
   { id: "market-sw", prefab: "MarketCluster", tileX: -6, tileZ: 8 },
   { id: "garden-west", prefab: "GardenCluster", tileX: -10, tileZ: 0 },

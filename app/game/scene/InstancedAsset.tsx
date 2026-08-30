@@ -119,11 +119,12 @@ function extractTemplateMeshes(
     definition.pivotOffset,
   );
   normalized.updateMatrixWorld(true);
+  const rootInverse = new Matrix4().copy(normalized.matrixWorld).invert();
   const meshes: TemplateMesh[] = [];
   normalized.traverse((object) => {
     if (!(object instanceof Mesh)) return;
-    const localMatrix = new Matrix4();
-    localMatrix.copy(object.matrix);
+    object.updateWorldMatrix(true, false);
+    const localMatrix = new Matrix4().multiplyMatrices(rootInverse, object.matrixWorld);
     meshes.push({
       geometry: object.geometry,
       localMatrix,
