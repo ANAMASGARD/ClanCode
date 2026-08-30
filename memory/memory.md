@@ -1,6 +1,6 @@
 # ClanCode — Project Memory
 
-**Last updated:** 2026-08-29 (3D clan game foundation + hover-label fix)
+**Last updated:** 2026-08-30 (clan village visual redesign — scene only)
 
 ## What This Repo Is
 
@@ -165,7 +165,35 @@ Production Socket.IO host is **decision later** (local Bun `:3001` for developme
 
 ---
 
-## Active milestone: 3D clan game foundation
+## Active milestone: Clan village visual redesign (scene only)
+
+**Branch:** `feat/clancode-village-visual-redesign` (from game foundation)
+
+- Flat irregular grass island replaces rectangular `RoundedBox` slabs; west beach, varied cliff edges, brightened water and sky.
+- Asset catalog expanded to **231** curated Kenney GLBs with measured `uniformScale`, `pivotMode`, `district`, and `instanceable` flags.
+- `AssetModel` honours modular origins (`preserve-origin`) vs standalone props (`ground-center`).
+- Data-driven layout modules: walls, roads, semantic/decorative placements, harbor props.
+- Diamond-reading castle wall ring (world-axis square on isometric camera); Town Hall rebuilt without stretched roofs.
+- 16 decorative house/yard prefabs outside the walled core; continuous road network.
+- Three-sided forest bands (north/east/south) with 120+ trees; west harbor district with two ships, lighthouse, palms, rocks.
+- Removed committed `?debugAssets=1` overlay; softened shell vignette; brighter lighting and camera framing.
+- HUD unchanged except vignette/shell background tweak. No `clan-cli/` changes. Physics/persistence still deferred.
+
+### Visual redesign validation (2026-08-30)
+
+| Check | Result |
+|-------|--------|
+| `bun run game:assets:check` | 231 verified GLBs |
+| `bun run test:game` | 11 pass |
+| `bun run test:pairing` | 15 pass |
+| `bunx tsc --noEmit` | pass |
+| `bun run lint` | pass (0 errors) |
+| `bun run build -- --webpack` | pass |
+| `git diff -- clan-cli` | empty |
+
+---
+
+## Previous milestone: 3D clan game foundation
 
 **Branch:** `feat/clancode-game-foundation`
 

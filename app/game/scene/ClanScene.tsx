@@ -21,7 +21,6 @@ type ClanSceneProps = {
 export function ClanScene(props: ClanSceneProps) {
   return (
     <>
-      <color attach="background" args={["#7fb9b1"]} />
       <Lighting lowQuality={props.lowQuality} />
       <Terrain lowQuality={props.lowQuality} reducedMotion={props.reducedMotion} onReset={props.onReset} />
       <Forest lowQuality={props.lowQuality} />

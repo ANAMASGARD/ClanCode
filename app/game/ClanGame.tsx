@@ -1,18 +1,15 @@
 "use client";
 
-import { Html, useProgress } from "@react-three/drei";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useSearchParams } from "next/navigation";
-import { Component, Suspense, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
-import { ACESFilmicToneMapping, PCFShadowMap, SRGBColorSpace } from "three";
+import { useProgress } from "@react-three/drei";
+import { Canvas } from "@react-three/fiber";
+import { Component, Suspense, useEffect, useMemo, useState, type ErrorInfo, type ReactNode } from "react";
+import { ACESFilmicToneMapping, PCFSoftShadowMap, SRGBColorSpace } from "three";
 import { useClanAudio } from "./audio/useClanAudio";
 import { GameHud } from "./hud/GameHud";
 import { ClanScene } from "./scene/ClanScene";
 import { DEFAULT_CLAN_LAYOUT, type SemanticBuilding, type SemanticBuildingId } from "./state/default-layout";
 
 export function ClanGame() {
-  const searchParams = useSearchParams();
-  const debug = process.env.NODE_ENV !== "production" && searchParams.get("debugAssets") === "1";
   const [webgl] = useState(() => canUseWebGL());
   const [selected, setSelected] = useState<SemanticBuilding | null>(null);
   const [resetToken, setResetToken] = useState(0);
@@ -56,8 +53,8 @@ export function ClanGame() {
           gl={{ antialias: !lowQuality, powerPreference: "high-performance", toneMapping: ACESFilmicToneMapping }}
           onCreated={({ gl }) => {
             gl.outputColorSpace = SRGBColorSpace;
-            gl.toneMappingExposure = 0.9;
-            gl.shadowMap.type = PCFShadowMap;
+            gl.toneMappingExposure = 1.08;
+            gl.shadowMap.type = PCFSoftShadowMap;
           }}
         >
           <Suspense fallback={null}>
@@ -70,7 +67,6 @@ export function ClanGame() {
               lowQuality={lowQuality}
               reducedMotion={reducedMotion}
             />
-            {debug ? <SceneDebug /> : null}
           </Suspense>
         </Canvas>
       </SceneErrorBoundary>
@@ -93,26 +89,6 @@ function SceneProgress() {
   const { active, progress, item } = useProgress();
   if (!active) return null;
   return <ClanLoading label={item ? `Loading ${decodeURIComponent(item.split("/").at(-1) ?? "village")}` : "Building your clan…"} progress={progress} />;
-}
-
-function SceneDebug() {
-  const gl = useThree((state) => state.gl);
-  const output = useRef<HTMLDivElement>(null);
-  const frames = useRef(0);
-  useFrame(() => {
-    frames.current += 1;
-    if (frames.current % 30 === 0 && output.current) {
-      output.current.textContent = `calls ${gl.info.render.calls} · triangles ${gl.info.render.triangles} · objects ${gl.info.memory.geometries}`;
-    }
-  });
-  return (
-    <>
-      <gridHelper args={[56, 56, "#ffe28a", "#476f63"]} position={[0, 1.02, 0]} />
-      <Html fullscreen style={{ pointerEvents: "none" }}>
-        <div ref={output} className="clan-debug-readout">debug scene</div>
-      </Html>
-    </>
-  );
 }
 
 function ClanLoading({ label, progress }: { label: string; progress?: number }) {
