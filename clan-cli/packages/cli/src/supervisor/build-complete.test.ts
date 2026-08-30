@@ -31,6 +31,7 @@ describe("build turn finalization", () => {
 
   test("plan turn completes without validation", async () => {
     const events: RunEventType[] = [];
+    const payloads: unknown[] = [];
     await completeSuccessfulTurn({
       mode: "plan",
       mutatedThisTurn: false,
@@ -42,12 +43,14 @@ describe("build turn finalization", () => {
         events.push("validation.started");
         return { ok: true, output: "", skipped: false };
       },
-      emit: (type) => {
+      emit: (type, payload) => {
         events.push(type);
+        payloads.push(payload);
       },
       setReady: () => undefined,
     });
     expect(events).toEqual(["run.completed"]);
+    expect((payloads[0] as { mutated?: boolean }).mutated).toBe(false);
   });
 
   test("failed validation still emits run.completed with validationFailed", async () => {

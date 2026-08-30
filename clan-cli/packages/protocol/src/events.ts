@@ -1,30 +1,37 @@
 export const RUN_EVENT_VERSION = 1 as const;
 
-export type RunEventType =
-  | "task.accepted"
-  | "run.started"
-  | "run.completed"
-  | "run.failed"
-  | "run.cancelled"
-  | "agent.started"
-  | "agent.message"
-  | "session.created"
-  | "turn.started"
-  | "model.delta"
-  | "model.completed"
-  | "tool.requested"
-  | "tool.started"
-  | "tool.completed"
-  | "tool.failed"
-  | "approval.required"
-  | "approval.granted"
-  | "approval.denied"
-  | "diff.updated"
-  | "validation.started"
-  | "validation.completed"
-  | "git.branch_created"
-  | "git.commit_created"
-  | "pr.created";
+export const RUN_EVENT_TYPES = [
+  "task.accepted",
+  "run.started",
+  "run.completed",
+  "run.failed",
+  "run.cancelled",
+  "agent.started",
+  "agent.message",
+  "session.created",
+  "turn.started",
+  "model.delta",
+  "model.completed",
+  "tool.requested",
+  "tool.started",
+  "tool.completed",
+  "tool.failed",
+  "approval.required",
+  "approval.granted",
+  "approval.denied",
+  "diff.updated",
+  "validation.started",
+  "validation.completed",
+  "git.branch_created",
+  "git.commit_created",
+  "pr.created",
+] as const;
+
+export type RunEventType = (typeof RUN_EVENT_TYPES)[number];
+
+export function isRunEventType(value: unknown): value is RunEventType {
+  return typeof value === "string" && (RUN_EVENT_TYPES as readonly string[]).includes(value);
+}
 
 export type RunEvent = {
   version: typeof RUN_EVENT_VERSION;

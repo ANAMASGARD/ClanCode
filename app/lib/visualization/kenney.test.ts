@@ -18,6 +18,9 @@ describe("kenneyGlbUrl", () => {
     expect(kenneyGlbUrl("retroFantasy", "tower-paint")).toBe(
       "/assets/kenney_retro-fantasy-kit%20(1)/Models/GLB%20format/tower-paint.glb",
     );
+    expect(kenneyGlbUrl("modularBuildings", "building-block")).toBe(
+      "/assets/kenney_modular-buildings/Models/GLB%20format/building-block.glb",
+    );
   });
 
   test("rejects traversal and filenames", () => {

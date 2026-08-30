@@ -6,6 +6,7 @@ export const KENNEY_KIT_DIRECTORIES = {
   blockyCharacters: "kenney_blocky-characters_20",
   castle: "kenney_castle-kit",
   retroFantasy: "kenney_retro-fantasy-kit (1)",
+  modularBuildings: "kenney_modular-buildings",
 } as const;
 
 const MODEL_DIRECTORIES = {
@@ -21,6 +22,7 @@ export const KENNEY_GLB_DIRECTORIES = {
   blockyCharacters: ["Models", "GLB format"],
   castle: ["Models", "GLB format"],
   retroFantasy: ["Models", "GLB format"],
+  modularBuildings: ["Models", "GLB format"],
 } as const;
 
 const TEXTURE_DIRECTORIES = {

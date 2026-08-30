@@ -91,8 +91,10 @@ export async function pairDeviceInteractive(): Promise<PairDeviceResult> {
   }
 
   console.log(`Pairing code: ${start.userCode}`);
-  console.log(`Opening ${start.verifyUrl}`);
-  console.log("Sign in with Clerk on the website, then approve this device.");
+  console.log(`Open in browser: ${start.verifyUrl}`);
+  console.log(
+    "Sign in with the Clerk account you use on the website, then approve this laptop.",
+  );
   await openBrowser(start.verifyUrl);
 
   const deadline = Date.now() + start.expiresIn * 1000;
@@ -137,25 +139,19 @@ export async function pairDeviceInteractive(): Promise<PairDeviceResult> {
   return "timeout";
 }
 
-export async function ensureDevicePaired(): Promise<number> {
-  if (await hasDeviceCredentials()) {
-    return 0;
-  }
-
-  console.log("This laptop is not paired with Clan Code yet.");
-  console.log("We'll open your browser so you can sign in and approve this device.\n");
-
-  const result = await pairDeviceInteractive();
+function exitCodeForPairResult(result: PairDeviceResult): number {
   switch (result) {
     case "approved":
       console.log("\nDevice paired successfully.");
-      console.log("This laptop stays paired after reboot. Running `clancode` comes online automatically.");
+      console.log(
+        "This laptop stays paired after reboot. Running `clancode` comes online automatically.",
+      );
       return 0;
     case "denied":
       console.error("\nPairing was denied in the browser.");
       return 1;
     case "expired":
-      console.error("\nPairing challenge expired. Try again.");
+      console.error("\nPairing challenge expired. Run `clancode login` again.");
       return 1;
     case "timeout":
       console.error("\nTimed out waiting for browser approval.");
@@ -166,11 +162,30 @@ export async function ensureDevicePaired(): Promise<number> {
   }
 }
 
-export async function runLoginCommand(): Promise<number> {
-  console.log("Starting device pairing…");
+export async function ensureDevicePaired(): Promise<number> {
   if (await hasDeviceCredentials()) {
-    console.log("This device already has stored credentials.");
-    console.log("Revoke the device on the dashboard first if you need to re-pair.");
+    return 0;
   }
-  return await ensureDevicePaired();
+
+  console.log("This laptop is not paired with Clan Code yet.");
+  console.log("We'll open your browser so you can sign in and approve this device.\n");
+
+  return exitCodeForPairResult(await pairDeviceInteractive());
+}
+
+/**
+ * Always starts a fresh browser pairing flow. Replaces stored credentials after approval.
+ * Use this when switching Clerk accounts or re-linking the laptop.
+ */
+export async function runLoginCommand(): Promise<number> {
+  if (await hasDeviceCredentials()) {
+    console.log("Replacing the stored pairing on this laptop.");
+    console.log(
+      "Sign in on the website with the Clerk account you want linked to this CLI.\n",
+    );
+  } else {
+    console.log("Starting device pairing…\n");
+  }
+
+  return exitCodeForPairResult(await pairDeviceInteractive());
 }

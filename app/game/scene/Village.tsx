@@ -17,6 +17,9 @@ import { BuildingMarker } from "./BuildingMarker";
 import { AssetModel } from "./AssetModel";
 import { EditablePlacement, PlotGroundPicker } from "./EditablePlacement";
 import { InstancedAsset } from "./InstancedAsset";
+import { PlacementMarker } from "./PlacementMarker";
+import { placementWorldPosition } from "@/app/game/state/clan-layout";
+import { findShopItem } from "@/app/game/state/placable-catalog";
 
 type VillageProps = {
   layout: ClanPlacement[];
@@ -38,6 +41,18 @@ function placementInstanceId(placement: ClanPlacement): string {
 
 function semanticRenderScale(visualScale?: number): number {
   return BUILDING_VISUAL_SCALE * (visualScale ?? 1);
+}
+
+function placementLabel(placement: ClanPlacement): string {
+  if (placement.kind === "decorative") {
+    const item = findShopItem(`prefab-${placement.prefab}`);
+    return item?.label ?? placement.prefab;
+  }
+  if (placement.kind === "prop") {
+    const item = findShopItem(`prop-${placement.assetKey}`);
+    return item?.label ?? placement.assetKey;
+  }
+  return "Building";
 }
 
 export function Village({
@@ -128,11 +143,17 @@ export function Village({
           return (
             <group
               key={id}
-              position={[placement.tileX * 2, GROUND_Y, placement.tileZ * 2]}
+              position={placementWorldPosition(placement)}
               rotation={[0, placement.rotation ?? 0, 0]}
               scale={BUILDING_VISUAL_SCALE}
             >
-              <Component reducedMotion={reducedMotion} />
+              <PlacementMarker
+                label={placementLabel(placement)}
+                selected={selectedPlacementId === id}
+                onSelect={() => onSelectPlacement(id)}
+              >
+                <Component reducedMotion={reducedMotion} />
+              </PlacementMarker>
             </group>
           );
         }
@@ -158,10 +179,17 @@ export function Village({
         return (
           <group
             key={id}
-            position={[placement.tileX * 2, GROUND_Y, placement.tileZ * 2]}
+            position={placementWorldPosition(placement)}
             rotation={[0, placement.rotation ?? 0, 0]}
           >
-            <AssetModel assetKey={placement.assetKey} />
+            <PlacementMarker
+              label={placementLabel(placement)}
+              selected={selectedPlacementId === id}
+              onSelect={() => onSelectPlacement(id)}
+              radius={1.2}
+            >
+              <AssetModel assetKey={placement.assetKey} />
+            </PlacementMarker>
           </group>
         );
       })}

@@ -1,15 +1,16 @@
 # ClanCode — Project Memory
 
-**Last updated:** 2026-08-30 (Search Tower beam + Fantasy Town village set)
+**Last updated:** 2026-08-30 (run harness: restart, session logs, PR links, construction viz)
 
 ## What This Repo Is
 
 ClanCode is a local-first AI coding harness:
 
-- **Web app (`app/`)** — Next.js control plane: Clerk auth, device pairing, dashboard device presence, Neon/Drizzle persistence. **Socket.IO task composer not wired yet.**
-- **CLI (`clan-cli/`)** — Complete local execution plane (`@clancode/cli`). Users run `clancode`, not TrueForge directly.
+- **Web app (`app/`)** — Next.js control plane: Clerk auth, device pairing, clan island, command dock, Neon/Drizzle persistence. Commands go through `/api/clan/*`; the web app does **not** execute tools or write run projections directly (gateway relay → CLI).
+- **CLI (`clan-cli/`)** — Local execution plane (`@clancode/cli`). Users run `clancode`, not TrueForge directly.
 - **TrueForge** — Runtime agent harness via `RunSupervisor`.
-- **Delivery** — Agent changes go through isolated branches → PR → Qodo review → human merge.
+- **Realtime gateway** — Loopback `:3001`. Internal `POST /internal/command` plus Socket.IO to the paired CLI. Gateway is the writer of `clan_run_projections` from sanitized `RunEvent`s.
+- **Delivery** — Agent changes go through isolated branches → human-confirmed PR → Qodo review → human merge.
 
 Stable contracts: `ARCHITECTURE.md`, `AGENTS.md`. Volatile status lives here.
 
@@ -18,6 +19,75 @@ Stable contracts: `ARCHITECTURE.md`, `AGENTS.md`. Volatile status lives here.
 > The web app expresses intent and visualizes state; the paired local CLI executes inside an approved repository; TrueForge runs the agents; policy gates their tools; risky actions require a human; and code reaches the default branch only through a reviewed pull request.
 
 Do not move filesystem/shell/Git execution into the Next.js app.
+
+## Milestone: TrueForge run visualization (active)
+
+Island builders, Approval Gate, PR Courier, and Builder Workshop construction site are driven by a single Neon snapshot of sanitized `RunEvent`s.
+
+### What works now
+
+| Flow | Status |
+|------|--------|
+| Dispatch / cancel / approve / create-PR from Clan Command Dock (Castle rail) | ✅ |
+| Voice task input (OpenAI transcription via `/api/clan/transcribe`) | ✅ |
+| Scrollable activity log with phase/tool/event deltas | ✅ |
+| **Restart harness** — archives activity, cancels stale run, resets projection to idle | ✅ |
+| Stale-run detection (`planning` + `task.start` + `lastSequence === 0`) with user hint | ✅ |
+| Clickable PR links in web activity panel | ✅ |
+| **Delete building** — click island decoration or optional semantic building → red Delete in side panel | ✅ |
+| **Session history popup** — ◫ rail or Session Lodge → archived runs + chat/activity lines | ✅ |
+| Construction site at workshop (3D scaffolding, no DOM overlay) | ✅ |
+| Workshop +1 storey only for unique successful **Build** with `changed` and validation passed/skipped (cap 4) | ✅ |
+| Layout edit (✥) enabled during runs; decorative remove-on-click in edit mode | ✅ |
+| Cancel run (red button) relays to shared CLI supervisor | ✅ |
+
+### Session log archive
+
+When a run is **restarted**, **cancelled**, or `/new` in the CLI:
+
+- **Web (Neon):** `clan_run_session_logs` — archived activity lines + run metadata (`drizzle/0003_clan_run_session_logs.sql`, index in `0004`).
+- **CLI (local):** `$XDG_STATE_HOME/clancode/session-logs/*.json` — full TUI transcript via `archiveRunLog()`.
+
+API: `POST /api/clan/run/reset` — tries cancel, archives activity payload, calls `resetRunProjection()`.  
+API: `GET /api/clan/session-logs` — lists archived sessions for the signed-in user (newest first).
+
+Protected semantic buildings (cannot delete): Clan Castle, Approval Gate, Builder Workshop, Validation Forge, Test Camp.
+
+### CLI transcript improvements
+
+- Structured events use `formatRunEventLine()` — PR shows full URL, number, branch, and `repo=` path.
+- `/new` and `/cancel` archive transcript before clearing; path printed in system line.
+
+### Projection rules (unchanged)
+
+- `requestedMode` seeded from accepted `task.start`, never from `run.started.payload.mode`.
+- Gate opens only on real `approval.granted`. Ship sails only on real `pr.created`.
+- Demo file: `demo-obsolete.txt`.
+
+### Env
+
+- `CLANCODE_REALTIME_RELAY_SECRET`, `CLANCODE_REALTIME_INTERNAL_URL=http://127.0.0.1:3001`
+- Optional `CLANCODE_COMMAND_ACK_TIMEOUT_MS` (default 45000)
+- Optional `OPENAI_API_KEY` for voice in command dock
+
+### Migrations
+
+- `drizzle/0002_clan_run_projections.sql`
+- `drizzle/0003_clan_run_session_logs.sql` + `0004_clan_run_session_logs_idx.sql` (Neon requires one statement per migration file)
+
+Apply: `bun run db:migrate`
+
+### Validation (2026-08-30)
+
+| Check | Result |
+|-------|--------|
+| `bun test` (web root, all suites) | 244 pass |
+| `bun run test:pairing` | included above |
+| `bun run test:game` | included above |
+| `bun run game:assets:check` | 366 verified GLBs |
+| `bun run lint` | pass (0 errors, pre-existing warnings) |
+| `bun run build` (web) | pass |
+| `clan-cli` `bun test` + `typecheck` + `build` | 97 pass, pass, pass |
 
 ---
 
@@ -371,8 +441,8 @@ credentials.json (token + deviceId + controlUrl bundle)
 
 - Clerk on `/`, protected game at `/dashboard` (layout-level `auth.protect`), public `/pair`
 - `/dashboard/clan` aliases the game and `/dashboard/devices` preserves pairing/revocation controls
-- Drizzle tables: `devices`, `pairing_challenges`, `pairing_deliveries`, `clan_layouts`
-- Migrations: `drizzle/0000_smooth_sasquatch.sql`, `drizzle/0001_clan_layouts.sql`
+- Drizzle tables: `devices`, `pairing_challenges`, `pairing_deliveries`, `clan_layouts`, `clan_run_projections`, `clan_run_session_logs`
+- Migrations: `drizzle/0000`–`0004` — apply with `bun run db:migrate`
 - Dashboard polls `GET /api/devices` every 5s; green connected dot in `device-panel.tsx`
 - Copy clarifies: pair once, run `clancode`, no second login
 

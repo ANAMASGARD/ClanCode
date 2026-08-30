@@ -2,6 +2,7 @@ import type { GameAssetDefinition } from "./types";
 import {
   blockyCharacter,
   defineAsset,
+  modularBuilding,
   modularFantasy,
   natureProp,
   natureTile,
@@ -442,4 +443,21 @@ export const CATALOG_ENTRIES: GameAssetDefinition[] = [
   blockyCharacter("villager.p", "character-p"),
   blockyCharacter("villager.q", "character-q"),
   blockyCharacter("villager.r", "character-r"),
+
+  // —— Modular Buildings (Builder Workshop) ——
+  modularBuilding("modular.block", "building-block"),
+  modularBuilding("modular.corner", "building-corner"),
+  modularBuilding("modular.cornerWindow", "building-corner-window"),
+  modularBuilding("modular.door", "building-door"),
+  modularBuilding("modular.doorBrown", "door-brown"),
+  modularBuilding("modular.windows", "building-windows"),
+  modularBuilding("modular.windowLeft", "building-window-left"),
+  modularBuilding("modular.windowRight", "building-window-right"),
+  modularBuilding("modular.windowWide", "building-window-wide"),
+  modularBuilding("modular.roofFlat", "roof-flat-center"),
+  modularBuilding("modular.roofGable", "roof-gable"),
+  modularBuilding("modular.roofSlanted", "roof-slanted"),
+  modularBuilding("modular.roofFlatDetail", "roof-flat-detail-a"),
+  modularBuilding("modular.sampleTower", "building-sample-tower-b"),
+  modularBuilding("modular.detailAc", "detail-ac-a"),
 ];

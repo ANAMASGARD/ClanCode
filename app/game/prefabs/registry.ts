@@ -26,9 +26,8 @@ import {
   Well,
 } from "./DecorativeBuildings";
 import { Farm, SmallWindmill, Watermill, Windmill } from "./Mills";
+import { BuilderWorkshop } from "./BuilderWorkshop";
 import {
-  ApprovalGate,
-  BuilderWorkshop,
   Market,
   ModelShrine,
   SearchTower,
@@ -36,6 +35,7 @@ import {
   TestCamp,
   ValidationForge,
 } from "./SemanticBuildings";
+import { ApprovalGate } from "@/app/game/scene/ApprovalGate";
 import { TownHall } from "./TownHall";
 
 export type PrefabDefinition = {

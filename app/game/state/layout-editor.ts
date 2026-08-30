@@ -6,6 +6,7 @@ import {
   DEFAULT_SEED_LAYOUT,
   FIXED_SEMANTIC_IDS,
   MAX_LAYOUT_PLACEMENTS,
+  canRemovePlacement,
   type ClanPlacement,
   placementKey,
 } from "./clan-layout";
@@ -154,8 +155,7 @@ export function movePlacement(
 
 export function removePlacement(layout: ClanPlacement[], placementId: string): ClanPlacement[] | null {
   const target = layout.find((p) => getPlacementId(p) === placementId);
-  if (!target) return null;
-  if (target.kind === "semantic") return null;
+  if (!target || !canRemovePlacement(target)) return null;
   return layout.filter((p) => getPlacementId(p) !== placementId);
 }
 
@@ -172,6 +172,11 @@ export function addPlacement(layout: ClanPlacement[], placement: ClanPlacement):
   }
 
   return [...layout, placement];
+}
+
+/** Put a previously removed placement back at its saved tile. */
+export function restorePlacement(layout: ClanPlacement[], placement: ClanPlacement): ClanPlacement[] | null {
+  return addPlacement(layout, placement);
 }
 
 export function rotatePlacement(layout: ClanPlacement[], placementId: string): ClanPlacement[] | null {

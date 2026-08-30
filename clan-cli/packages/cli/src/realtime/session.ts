@@ -1,5 +1,5 @@
+import { basename } from "node:path";
 import {
-  createRunEvent,
   parseCommandEnvelope,
   projectRunEventForNetwork,
   type RunEvent,
@@ -19,6 +19,7 @@ import {
 import { CommandJournal, isCommandExpired } from "./journal.ts";
 import type { RealtimeClient } from "./client.ts";
 import { resolveRealtimeCredentials } from "./credentials.ts";
+import { resolveRepository } from "../repository/repository.ts";
 
 const BUSY_STATUSES = new Set([
   "starting_runtime",
@@ -32,6 +33,8 @@ const BUSY_STATUSES = new Set([
 export type ConnectSupervisor = {
   readonly runId: string;
   readonly pendingApprovals: ReadonlyArray<{ toolCallId: string }>;
+  readonly mode: "plan" | "build";
+  readonly worktree: { worktreePath: string; branchName: string } | undefined;
   status(): string;
   start(repositoryPath: string): Promise<void>;
   setMode(mode: "plan" | "build"): Promise<void>;
@@ -39,6 +42,9 @@ export type ConnectSupervisor = {
   stop(): Promise<void>;
   cancel(): Promise<void>;
   resolveApproval(allow: boolean): Promise<void>;
+  commit(message: string, approved: boolean): Promise<void>;
+  push(approved: boolean): Promise<void>;
+  createPr(title: string, approved: boolean): Promise<void>;
   subscribe(handler: (event: RunEvent) => void): () => void;
 };
 
@@ -48,7 +54,14 @@ export type ConnectSessionOptions = {
     config: TrueforgeConfig,
     options: { runtimeLease: RuntimeLease },
   ) => ConnectSupervisor;
+  /** When set (interactive CLI), web `task.start` runs on this supervisor instead of spawning another. */
+  getSharedSupervisor?: () => ConnectSupervisor | undefined;
+  onRemoteTask?: (input: { prompt: string; mode: "plan" | "build" | undefined }) => void;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 
 export class ConnectSession {
   readonly #runtimeManager: SupervisorRuntimeManager;
@@ -56,24 +69,47 @@ export class ConnectSession {
     config: TrueforgeConfig,
     options: { runtimeLease: RuntimeLease },
   ) => ConnectSupervisor;
+  readonly #getSharedSupervisor: (() => ConnectSupervisor | undefined) | undefined;
+  readonly #onRemoteTask:
+    | ((input: { prompt: string; mode: "plan" | "build" | undefined }) => void)
+    | undefined;
   readonly #journal = new CommandJournal();
   #supervisor: ConnectSupervisor | undefined;
   #deviceId: string | undefined;
   #heartbeat: ReturnType<typeof setInterval> | undefined;
   #unsubscribe: (() => void) | undefined;
   #commandChain: Promise<void> = Promise.resolve();
+  #repositoryRoot: string | undefined;
+  #repositoryDisplay: string | undefined;
+  #activeRunId: string | undefined;
+  #retainedDeliveryRunId: string | undefined;
+  #requestedMode: "plan" | "build" | undefined;
+  #approvalInFlight = false;
+  #generation = 0;
+  #cancelled = false;
 
   constructor(options: ConnectSessionOptions = {}) {
     this.#runtimeManager = options.runtimeManager ?? new SupervisorRuntimeManager();
     this.#createSupervisor =
       options.createSupervisor ??
       ((config, runtimeOptions) => new RunSupervisor(config, runtimeOptions));
+    this.#getSharedSupervisor = options.getSharedSupervisor;
+    this.#onRemoteTask = options.onRemoteTask;
   }
 
   async start(client: RealtimeClient): Promise<void> {
     const credentials = await resolveRealtimeCredentials();
     this.#deviceId = credentials.deviceId;
-    this.#sendHello(client, "idle");
+    try {
+      const repo = await resolveRepository(process.cwd());
+      this.#repositoryRoot = repo.root;
+      this.#repositoryDisplay = basename(repo.root);
+    } catch {
+      this.#repositoryRoot = undefined;
+      this.#repositoryDisplay = undefined;
+    }
+    this.#attachSharedSupervisor(client);
+    this.#sendHello(client, this.#connectStatus());
     this.#heartbeat = setInterval(() => {
       this.#sendHeartbeat(client);
     }, 20_000);
@@ -83,6 +119,8 @@ export class ConnectSession {
   }
 
   async stop(client: RealtimeClient): Promise<void> {
+    this.#generation += 1;
+    this.#cancelled = true;
     if (this.#heartbeat !== undefined) {
       clearInterval(this.#heartbeat);
       this.#heartbeat = undefined;
@@ -93,6 +131,8 @@ export class ConnectSession {
       await this.#supervisor.stop();
       this.#supervisor = undefined;
     }
+    this.#activeRunId = undefined;
+    this.#retainedDeliveryRunId = undefined;
     await this.#runtimeManager.stopIfSpawned();
     client.disconnect();
   }
@@ -142,6 +182,9 @@ export class ConnectSession {
       case "approval.resolve":
         await this.#approvalResolve(client, command);
         break;
+      case "delivery.create_pr":
+        await this.#deliveryCreatePr(client, command);
+        break;
       default: {
         const _never: never = command.type;
         this.#ack(client, command.commandId, "rejected", undefined, "invalid");
@@ -167,30 +210,15 @@ export class ConnectSession {
       reason: "failed",
     });
     this.#ack(client, command.commandId, "rejected", undefined, "failed");
-    await this.#disposeSupervisor();
-    this.#sendHello(client, "idle");
-  }
-
-  async #handlePostAcceptFailure(
-    client: RealtimeClient,
-    command: CommandEnvelope,
-    error: unknown,
-  ): Promise<void> {
-    const runId = this.#supervisor?.runId;
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("connect task failed after accept:", message);
-    if (runId !== undefined) {
-      this.#emitRunEvent(
-        client,
-        createRunEvent({
-          runId,
-          sequence: 0,
-          type: "run.failed",
-          payload: { message, code: "execution_failed" },
-        }),
-      );
+    const shared = this.#getSharedSupervisor?.();
+    if (this.#supervisor === undefined || this.#supervisor !== shared) {
+      await this.#disposeSupervisor();
+    } else {
+      this.#unsubscribe?.();
+      this.#unsubscribe = undefined;
+      this.#supervisor = undefined;
+      this.#activeRunId = undefined;
     }
-    await this.#disposeSupervisor();
     this.#sendHello(client, "idle");
   }
 
@@ -200,18 +228,27 @@ export class ConnectSession {
     if (this.#supervisor === undefined) {
       return;
     }
+    const shared = this.#getSharedSupervisor?.();
+    if (shared !== undefined && this.#supervisor === shared) {
+      this.#supervisor = undefined;
+      this.#activeRunId = undefined;
+      return;
+    }
     try {
       await this.#supervisor.stop();
     } catch {
       // Best-effort cleanup after failures.
     }
     this.#supervisor = undefined;
+    this.#activeRunId = undefined;
   }
 
   async #taskStart(client: RealtimeClient, command: CommandEnvelope): Promise<void> {
+    const sharedSupervisor = this.#getSharedSupervisor?.();
+    const candidate = this.#supervisor ?? sharedSupervisor;
     if (
-      this.#supervisor !== undefined &&
-      BUSY_STATUSES.has(this.#supervisor.status())
+      this.#activeRunId !== undefined ||
+      (candidate !== undefined && BUSY_STATUSES.has(candidate.status()))
     ) {
       await this.#journal.record({
         commandId: command.commandId,
@@ -223,32 +260,61 @@ export class ConnectSession {
       this.#ack(client, command.commandId, "rejected", undefined, "busy");
       return;
     }
-    const payload = command.payload as {
-      repositoryPath?: string;
-      prompt?: string;
-      mode?: "plan" | "build";
-    };
-    if (
-      typeof payload.repositoryPath !== "string" ||
-      typeof payload.prompt !== "string"
-    ) {
+    const payload = isRecord(command.payload) ? command.payload : {};
+    const prompt = payload.prompt;
+    if (typeof prompt !== "string" || prompt.trim().length === 0) {
       this.#ack(client, command.commandId, "rejected", undefined, "invalid");
       return;
     }
-    if (this.#supervisor !== undefined) {
-      await this.#disposeSupervisor();
+    if (this.#repositoryRoot === undefined) {
+      this.#ack(client, command.commandId, "rejected", undefined, "invalid");
+      return;
     }
-    let accepted = false;
+    const mode = payload.mode === "plan" || payload.mode === "build" ? payload.mode : undefined;
+    const trimmedPrompt = prompt.trim();
+    this.#retainedDeliveryRunId = undefined;
+    this.#cancelled = false;
     try {
-      const handle = await this.#runtimeManager.ensure();
-      this.#supervisor = this.#createSupervisor(loadTrueforgeConfig(), {
-        runtimeLease: leaseRuntime(handle),
-      });
-      this.#wireEvents(client);
-      await this.#supervisor.start(payload.repositoryPath);
-      if (payload.mode === "build") {
-        await this.#supervisor.setMode("build");
+      const shared = this.#getSharedSupervisor?.();
+      const useShared = shared !== undefined;
+      if (useShared) {
+        if (BUSY_STATUSES.has(shared.status())) {
+          await this.#journal.record({
+            commandId: command.commandId,
+            receivedAt: new Date().toISOString(),
+            expiresAt: command.expiresAt,
+            status: "rejected",
+            reason: "busy",
+          });
+          this.#ack(client, command.commandId, "rejected", undefined, "busy");
+          return;
+        }
+        this.#supervisor = shared;
+      } else if (this.#supervisor !== undefined) {
+        await this.#disposeSupervisor();
       }
+
+      if (this.#supervisor === undefined) {
+        const handle = await this.#runtimeManager.ensure();
+        this.#supervisor = this.#createSupervisor(loadTrueforgeConfig(), {
+          runtimeLease: leaseRuntime(handle),
+        });
+      }
+
+      this.#wireEvents(client);
+      const supervisorStatus = this.#supervisor.status();
+      if (supervisorStatus === "idle" || supervisorStatus === "stopped") {
+        await this.#supervisor.start(this.#repositoryRoot);
+      }
+      if (mode === "build") {
+        await this.#supervisor.setMode("build");
+      } else if (mode === "plan") {
+        await this.#supervisor.setMode("plan");
+      }
+      this.#requestedMode = mode ?? this.#supervisor.mode;
+      this.#activeRunId = this.#supervisor.runId;
+      this.#generation += 1;
+      const generation = this.#generation;
       await this.#journal.record({
         commandId: command.commandId,
         receivedAt: new Date().toISOString(),
@@ -257,22 +323,20 @@ export class ConnectSession {
         runId: this.#supervisor.runId,
       });
       this.#ack(client, command.commandId, "accepted", this.#supervisor.runId);
-      accepted = true;
       this.#sendHello(client, "busy");
-      await this.#supervisor.submitMessage(payload.prompt);
-      this.#sendHello(client, this.#connectStatus());
+      this.#onRemoteTask?.({ prompt: trimmedPrompt, mode });
+      this.#launchDetached(client, generation, async () => {
+        await this.#supervisor?.submitMessage(trimmedPrompt);
+      });
     } catch (error) {
-      if (accepted) {
-        await this.#handlePostAcceptFailure(client, command, error);
-      } else {
-        await this.#rejectBeforeAccept(client, command, error);
-      }
+      await this.#rejectBeforeAccept(client, command, error);
     }
   }
 
   async #taskCancel(client: RealtimeClient, command: CommandEnvelope): Promise<void> {
-    const payload = command.payload as { runId?: string };
-    if (this.#supervisor === undefined) {
+    const payload = isRecord(command.payload) ? command.payload : {};
+    const supervisor = this.#resolveSupervisor();
+    if (supervisor === undefined) {
       this.#ack(client, command.commandId, "rejected", undefined, "no_active_run");
       return;
     }
@@ -280,49 +344,58 @@ export class ConnectSession {
       this.#ack(client, command.commandId, "rejected", undefined, "invalid");
       return;
     }
-    if (payload.runId !== this.#supervisor.runId) {
+    if (payload.runId !== supervisor.runId) {
       this.#ack(client, command.commandId, "rejected", undefined, "run_mismatch");
       return;
     }
-    await this.#supervisor.cancel();
+    this.#cancelled = true;
+    this.#generation += 1;
+    await supervisor.cancel();
+    this.#activeRunId = undefined;
+    this.#retainedDeliveryRunId = undefined;
     await this.#journal.record({
       commandId: command.commandId,
       receivedAt: new Date().toISOString(),
       expiresAt: command.expiresAt,
       status: "accepted",
-      runId: this.#supervisor.runId,
+      runId: supervisor.runId,
     });
-    this.#ack(client, command.commandId, "accepted", this.#supervisor.runId);
+    this.#ack(client, command.commandId, "accepted", supervisor.runId);
     this.#sendHello(client, "idle");
   }
 
   async #approvalResolve(client: RealtimeClient, command: CommandEnvelope): Promise<void> {
-    const payload = command.payload as {
-      runId?: string;
-      toolCallId?: string;
-      allow?: boolean;
-    };
+    const payload = isRecord(command.payload) ? command.payload : {};
+    const runId = payload.runId;
+    const toolCallId = payload.toolCallId;
+    const allow = payload.allow;
     if (
       this.#supervisor === undefined ||
-      typeof payload.runId !== "string" ||
-      typeof payload.toolCallId !== "string" ||
-      typeof payload.allow !== "boolean"
+      typeof runId !== "string" ||
+      typeof toolCallId !== "string" ||
+      typeof allow !== "boolean"
     ) {
       this.#ack(client, command.commandId, "rejected", undefined, "invalid");
       return;
     }
-    if (payload.runId !== this.#supervisor.runId) {
+    if (runId !== this.#supervisor.runId) {
       this.#ack(client, command.commandId, "rejected", undefined, "run_mismatch");
       return;
     }
+    if (this.#approvalInFlight) {
+      this.#ack(client, command.commandId, "rejected", undefined, "busy");
+      return;
+    }
     const pending = this.#supervisor.pendingApprovals.find(
-      (item) => item.toolCallId === payload.toolCallId,
+      (item) => item.toolCallId === toolCallId,
     );
     if (pending === undefined) {
       this.#ack(client, command.commandId, "rejected", undefined, "no_pending_approval");
       return;
     }
-    await this.#supervisor.resolveApproval(payload.allow);
+    this.#approvalInFlight = true;
+    this.#generation += 1;
+    const generation = this.#generation;
     await this.#journal.record({
       commandId: command.commandId,
       receivedAt: new Date().toISOString(),
@@ -331,16 +404,134 @@ export class ConnectSession {
       runId: this.#supervisor.runId,
     });
     this.#ack(client, command.commandId, "accepted", this.#supervisor.runId);
+    this.#launchDetached(client, generation, async () => {
+      try {
+        await this.#supervisor?.resolveApproval(allow);
+      } finally {
+        if (generation === this.#generation) {
+          this.#approvalInFlight = false;
+        }
+      }
+    });
+  }
+
+  async #deliveryCreatePr(client: RealtimeClient, command: CommandEnvelope): Promise<void> {
+    const payload = isRecord(command.payload) ? command.payload : {};
+    if (typeof payload.runId !== "string" || payload.runId.length === 0) {
+      this.#ack(client, command.commandId, "rejected", undefined, "invalid");
+      return;
+    }
+    if (this.#activeRunId !== undefined) {
+      this.#ack(client, command.commandId, "rejected", undefined, "busy");
+      return;
+    }
+    if (this.#retainedDeliveryRunId === undefined || this.#supervisor === undefined) {
+      this.#ack(client, command.commandId, "rejected", undefined, "no_active_run");
+      return;
+    }
+    if (payload.runId !== this.#retainedDeliveryRunId || payload.runId !== this.#supervisor.runId) {
+      this.#ack(client, command.commandId, "rejected", undefined, "run_mismatch");
+      return;
+    }
+    if (this.#supervisor.mode !== "build" || this.#supervisor.worktree === undefined) {
+      this.#ack(client, command.commandId, "rejected", undefined, "invalid");
+      return;
+    }
+    const title = typeof payload.title === "string" && payload.title.trim().length > 0
+      ? payload.title.trim()
+      : "ClanCode task";
+    try {
+      await this.#supervisor.commit(title, true);
+      await this.#supervisor.push(true);
+      await this.#supervisor.createPr(title, true);
+      await this.#journal.record({
+        commandId: command.commandId,
+        receivedAt: new Date().toISOString(),
+        expiresAt: command.expiresAt,
+        status: "accepted",
+        runId: this.#supervisor.runId,
+      });
+      this.#ack(client, command.commandId, "accepted", this.#supervisor.runId);
+    } catch (error) {
+      console.error(
+        "connect delivery.create_pr failed:",
+        error instanceof Error ? error.message : String(error),
+      );
+      await this.#journal.record({
+        commandId: command.commandId,
+        receivedAt: new Date().toISOString(),
+        expiresAt: command.expiresAt,
+        status: "rejected",
+        reason: "failed",
+        runId: this.#supervisor.runId,
+      });
+      this.#ack(client, command.commandId, "rejected", this.#supervisor.runId, "failed");
+    }
+  }
+
+  #launchDetached(client: RealtimeClient, generation: number, task: () => Promise<void>): void {
+    void task()
+      .catch((error: unknown) => {
+        if (this.#cancelled || generation !== this.#generation) {
+          return;
+        }
+        console.error(
+          "connect detached execution failed:",
+          error instanceof Error ? error.message : String(error),
+        );
+      })
+      .finally(() => {
+        if (generation === this.#generation) {
+          this.#sendHello(client, this.#connectStatus());
+        }
+      });
   }
 
   #wireEvents(client: RealtimeClient): void {
-    if (this.#supervisor === undefined) {
+    const supervisor = this.#resolveSupervisor();
+    if (supervisor === undefined) {
       return;
     }
     this.#unsubscribe?.();
-    this.#unsubscribe = this.#supervisor.subscribe((event) => {
-      this.#emitRunEvent(client, event);
+    this.#unsubscribe = supervisor.subscribe((event) => {
+      this.#onSupervisorEvent(client, event);
     });
+  }
+
+  #resolveSupervisor(): ConnectSupervisor | undefined {
+    return this.#supervisor ?? this.#getSharedSupervisor?.();
+  }
+
+  #attachSharedSupervisor(client: RealtimeClient): void {
+    const shared = this.#getSharedSupervisor?.();
+    if (shared === undefined) {
+      return;
+    }
+    this.#supervisor = shared;
+    this.#wireEvents(client);
+  }
+
+  #onSupervisorEvent(client: RealtimeClient, event: RunEvent): void {
+    this.#emitRunEvent(client, event);
+    const supervisor = this.#resolveSupervisor();
+    if (supervisor === undefined || event.runId !== supervisor.runId) {
+      return;
+    }
+    if (event.type === "run.completed") {
+      this.#activeRunId = undefined;
+      const payload = isRecord(event.payload) ? event.payload : {};
+      const validationFailed = payload.validationFailed === true;
+      if (this.#requestedMode === "build" && !validationFailed) {
+        this.#retainedDeliveryRunId = event.runId;
+      } else {
+        this.#retainedDeliveryRunId = undefined;
+      }
+      return;
+    }
+    if (event.type === "run.failed" || event.type === "run.cancelled") {
+      this.#activeRunId = undefined;
+      this.#retainedDeliveryRunId = undefined;
+    }
   }
 
   #emitRunEvent(client: RealtimeClient, event: RunEvent): void {
@@ -380,13 +571,14 @@ export class ConnectSession {
   }
 
   #connectStatus(): DeviceHelloPayload["status"] {
-    if (this.#supervisor === undefined) {
+    const supervisor = this.#resolveSupervisor();
+    if (supervisor === undefined) {
       return "idle";
     }
-    if (this.#supervisor.status() === "awaiting_approval") {
+    if (supervisor.status() === "awaiting_approval") {
       return "awaiting_approval";
     }
-    if (BUSY_STATUSES.has(this.#supervisor.status())) {
+    if (BUSY_STATUSES.has(supervisor.status())) {
       return "busy";
     }
     return "idle";
@@ -400,8 +592,9 @@ export class ConnectSession {
       protocolVersion: 1,
       deviceId: this.#deviceId,
       status,
-      activeRunId: this.#supervisor?.runId,
-      capabilities: ["task.start", "task.cancel", "approval.resolve"],
+      activeRunId: this.#activeRunId,
+      repositoryDisplay: this.#repositoryDisplay,
+      capabilities: ["task.start", "task.cancel", "approval.resolve", "delivery.create_pr"],
     };
     client.sendEvent({
       version: 1,
@@ -420,7 +613,7 @@ export class ConnectSession {
     const payload: DeviceHeartbeatPayload = {
       deviceId: this.#deviceId,
       status: this.#connectStatus(),
-      activeRunId: this.#supervisor?.runId,
+      activeRunId: this.#activeRunId,
     };
     client.sendEvent({
       version: 1,
@@ -438,5 +631,8 @@ function extractCommandId(raw: unknown): string | undefined {
     return undefined;
   }
   const commandId = (raw as Record<string, unknown>).commandId;
-  return typeof commandId === "string" && commandId.length > 0 ? commandId : undefined;
+  if (typeof commandId !== "string" || commandId.length === 0) {
+    return undefined;
+  }
+  return commandId;
 }

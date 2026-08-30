@@ -1,6 +1,16 @@
 import { createServer, type Server as HttpServer } from "node:http";
 import { Server as SocketIOServer, type Socket } from "socket.io";
-import { parseClientEventEnvelope } from "../../../clan-cli/packages/protocol/src/network";
+import {
+  parseClientEventEnvelope,
+  parseRunEventNetworkPayload,
+  projectRunEventForNetwork,
+} from "../../../clan-cli/packages/protocol/src/network";
+import { applyAcceptedTask, applyProjectedRunEvent } from "@/app/lib/clan-run/service";
+import {
+  createAckRegistry,
+  DEFAULT_COMMAND_ACK_TIMEOUT_MS,
+  handleInternalCommand,
+} from "./relay";
 
 export type RealtimeGatewayDevice = {
   id: string;
@@ -16,6 +26,10 @@ export type RealtimeGatewayDeps = {
     deviceId: string;
     connectionState: "online" | "offline";
   }) => Promise<void>;
+  relaySecret?: string;
+  ackTimeoutMs?: number;
+  persistAcceptedTask?: typeof applyAcceptedTask;
+  persistRunEvent?: typeof applyProjectedRunEvent;
 };
 
 export type RealtimeGateway = {
@@ -35,8 +49,36 @@ function runDetached(
   });
 }
 
+function pickNewestSocket(sockets: Set<Socket> | undefined): Socket | undefined {
+  if (sockets === undefined) {
+    return undefined;
+  }
+  let chosen: Socket | undefined;
+  for (const socket of sockets) {
+    chosen = socket;
+  }
+  return chosen;
+}
+
 export function createRealtimeGateway(deps: RealtimeGatewayDeps): RealtimeGateway {
   const socketsByDevice = new Map<string, Set<Socket>>();
+  const ack = createAckRegistry(deps.ackTimeoutMs ?? DEFAULT_COMMAND_ACK_TIMEOUT_MS);
+  const persistAcceptedTask = deps.persistAcceptedTask ?? applyAcceptedTask;
+  const persistRunEvent = deps.persistRunEvent ?? applyProjectedRunEvent;
+  const relaySecret = deps.relaySecret ?? "";
+  const runEventChains = new Map<string, Promise<void>>();
+
+  function enqueueRunEvent(clerkUserId: string, task: () => Promise<void>): void {
+    const previous = runEventChains.get(clerkUserId) ?? Promise.resolve();
+    const next = previous.then(task, task);
+    runEventChains.set(
+      clerkUserId,
+      next.then(
+        () => undefined,
+        () => undefined,
+      ),
+    );
+  }
 
   function trackSocket(deviceId: string, socket: Socket): void {
     const existing = socketsByDevice.get(deviceId) ?? new Set<Socket>();
@@ -61,6 +103,7 @@ export function createRealtimeGateway(deps: RealtimeGatewayDeps): RealtimeGatewa
       return;
     }
     for (const socket of sockets) {
+      ack.rejectSocket(socket.id);
       socket.disconnect(true);
     }
     socketsByDevice.delete(deviceId);
@@ -72,7 +115,18 @@ export function createRealtimeGateway(deps: RealtimeGatewayDeps): RealtimeGatewa
     console.log(`Disconnected device ${deviceId}: ${reason}`);
   }
 
-  const httpServer = createServer((_req, res) => {
+  const httpServer = createServer((req, res) => {
+    if (req.method === "POST" && req.url === "/internal/command") {
+      void handleInternalCommand(req, res, {
+        relaySecret,
+        ack,
+        pickSocket: (deviceId) => pickNewestSocket(socketsByDevice.get(deviceId)),
+        onAccepted: async (input) => {
+          await persistAcceptedTask(input);
+        },
+      });
+      return;
+    }
     res.writeHead(200, { "Content-Type": "text/plain" });
     res.end("ClanCode realtime gateway\n");
   });
@@ -151,14 +205,42 @@ export function createRealtimeGateway(deps: RealtimeGatewayDeps): RealtimeGatewa
             await disconnectDevice(deviceId, "revoked_or_inactive");
             return;
           }
-          if (
-            envelope.type === "device.hello" ||
-            envelope.type === "device.heartbeat"
-          ) {
+          if (envelope.type === "device.hello" || envelope.type === "device.heartbeat") {
             const ok = await deps.touchDeviceHeartbeat(deviceId);
             if (!ok) {
               await disconnectDevice(deviceId, "heartbeat_rejected");
             }
+            return;
+          }
+          if (envelope.type === "command.ack") {
+            ack.resolveAck(socket.id, deviceId, envelope.payload);
+            return;
+          }
+          if (envelope.type === "run.event") {
+            const clerkUserId = socket.data.clerkUserId as string | undefined;
+            if (clerkUserId === undefined) {
+              return;
+            }
+            enqueueRunEvent(clerkUserId, async () => {
+              const token = String(socket.handshake.auth?.token ?? "");
+              const device = await deps.findDeviceByTokenHash(deps.hashToken(token));
+              if (device === undefined || device.status !== "active") {
+                await disconnectDevice(deviceId, "revoked_or_inactive");
+                return;
+              }
+              try {
+                const parsed = parseRunEventNetworkPayload(envelope.payload);
+                const projected = projectRunEventForNetwork(parsed);
+                await persistRunEvent({
+                  clerkUserId,
+                  deviceId,
+                  event: projected,
+                });
+              } catch (error) {
+                console.error("[realtime:run.event]", error);
+              }
+            });
+            return;
           }
         },
         () => {
@@ -171,6 +253,7 @@ export function createRealtimeGateway(deps: RealtimeGatewayDeps): RealtimeGatewa
       if (deviceId === undefined) {
         return;
       }
+      ack.rejectSocket(socket.id);
       untrackSocket(deviceId, socket);
       const remaining = socketsByDevice.get(deviceId);
       if (remaining === undefined || remaining.size === 0) {
@@ -185,6 +268,7 @@ export function createRealtimeGateway(deps: RealtimeGatewayDeps): RealtimeGatewa
     httpServer,
     io,
     async close() {
+      ack.rejectAll();
       await new Promise<void>((resolve, reject) => {
         io.close((error) => {
           if (error !== undefined) {

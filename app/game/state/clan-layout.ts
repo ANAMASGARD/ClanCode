@@ -34,6 +34,35 @@ export const FIXED_SEMANTIC_IDS = new Set<SemanticBuildingId>([
   "approval-gate",
 ]);
 
+/** Run-visualization anchors that must stay on the island. */
+export const PROTECTED_SEMANTIC_IDS = new Set<SemanticBuildingId>([
+  "town-hall",
+  "approval-gate",
+  "builder-workshop",
+  "validation-forge",
+  "test-camp",
+]);
+
+export function canRemovePlacement(placement: ClanPlacement): boolean {
+  if (placement.kind === "decorative" || placement.kind === "prop") {
+    return true;
+  }
+  if (placement.kind === "semantic") {
+    if (PROTECTED_SEMANTIC_IDS.has(placement.id)) {
+      return false;
+    }
+    return SEMANTIC_PREFABS[placement.id]?.movable ?? false;
+  }
+  return false;
+}
+
+export function canRemoveSemanticBuilding(id: SemanticBuildingId): boolean {
+  if (PROTECTED_SEMANTIC_IDS.has(id)) {
+    return false;
+  }
+  return SEMANTIC_PREFABS[id]?.movable ?? false;
+}
+
 export const MAX_LAYOUT_PLACEMENTS = 48;
 
 export function createDefaultSeedLayout(): ClanPlacement[] {

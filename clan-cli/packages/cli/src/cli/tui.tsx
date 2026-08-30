@@ -12,6 +12,8 @@ import {
 } from "../supervisor/supervisor.ts";
 import { listSessions } from "../session/store.ts";
 import { formatSessions } from "../session/format.ts";
+import { formatRunEventLine } from "../session/event-line.ts";
+import { archiveRunLog } from "../session/run-log.ts";
 import { loadTrueforgeConfig } from "../trueforge/config.ts";
 import { createAgentClient } from "../trueforge/agent.ts";
 import { listAvailableModels, selectModel } from "../models/resolve.ts";
@@ -31,6 +33,27 @@ type Line = {
 
 const FLUSH_MS = 80;
 
+const TRANSCRIPT_EVENTS = new Set<string>([
+  "run.started",
+  "run.completed",
+  "run.failed",
+  "run.cancelled",
+  "tool.requested",
+  "tool.started",
+  "tool.completed",
+  "tool.failed",
+  "approval.required",
+  "approval.granted",
+  "approval.denied",
+  "validation.started",
+  "validation.completed",
+  "session.created",
+  "turn.started",
+  "git.branch_created",
+  "git.commit_created",
+  "pr.created",
+]);
+
 export function ChatApp(props: Props) {
   const supervisorRef = useRef<RunSupervisor | undefined>(undefined);
   const [status, setStatus] = useState<RunStatus>("idle");
@@ -49,6 +72,33 @@ export function ChatApp(props: Props) {
   );
   const deltaBuffer = useRef("");
   const shutdownRef = useRef<(() => Promise<void>) | undefined>(undefined);
+  const linesRef = useRef(lines);
+
+  useEffect(() => {
+    linesRef.current = lines;
+  }, [lines]);
+
+  async function archiveCurrentTranscript(supervisor: RunSupervisor): Promise<string | undefined> {
+    if (linesRef.current.length === 0) {
+      return undefined;
+    }
+    try {
+      return await archiveRunLog({
+        runId: supervisor.runId,
+        repoRoot: supervisor.repo?.root,
+        branchName: supervisor.worktree?.branchName ?? supervisor.repo?.currentBranch,
+        phase: supervisor.status(),
+        lines: linesRef.current.map((entry) => ({
+          kind: entry.kind,
+          text: entry.text,
+          at: new Date().toISOString(),
+        })),
+      });
+    } catch (error) {
+      console.error("[clan-cli:archive-transcript]", error);
+      throw error;
+    }
+  }
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -73,6 +123,17 @@ export function ChatApp(props: Props) {
       if (event.type === "model.delta") {
         const payload = event.payload as { text?: string };
         deltaBuffer.current += payload.text ?? "";
+        return;
+      }
+      if (event.type === "agent.message") {
+        return;
+      }
+      if (event.type === "model.completed") {
+        if (deltaBuffer.current.length > 0) {
+          const text = deltaBuffer.current;
+          deltaBuffer.current = "";
+          setLines((current) => [...current, { kind: "agent", text }]);
+        }
         return;
       }
       if (deltaBuffer.current.length > 0) {
@@ -106,23 +167,44 @@ export function ChatApp(props: Props) {
           setBranch(payload.branchName);
         }
       }
-      setLines((current) => [...current, { kind: "event", text: event.type }]);
-    });
-
-    void supervisor.start(props.repo).then(() => {
-      setStatus(supervisor.status());
-      setRuntime(supervisor.runtimeMode());
-      if (supervisor.repo !== undefined) {
-        setRepo(supervisor.repo.root);
-        setBranch(supervisor.repo.currentBranch ?? "?");
+      if (TRANSCRIPT_EVENTS.has(event.type)) {
+        const repoRoot = supervisor.repo?.root;
+        setLines((current) => [
+          ...current,
+          { kind: "event", text: formatRunEventLine(event, repoRoot) },
+        ]);
+      }
+      if (event.type === "run.cancelled") {
+        void archiveCurrentTranscript(supervisor).catch(() => {
+          setLines((current) => [
+            ...current,
+            {
+              kind: "system",
+              text: "Transcript archive failed — see stderr for details.",
+            },
+          ]);
+        });
       }
     });
 
+    if (props.controlPlane !== true) {
+      void supervisor.start(props.repo).then(() => {
+        setStatus(supervisor.status());
+        setRuntime(supervisor.runtimeMode());
+        if (supervisor.repo !== undefined) {
+          setRepo(supervisor.repo.root);
+          setBranch(supervisor.repo.currentBranch ?? "?");
+        }
+      });
+    }
+
     return () => {
       unsubscribe();
-      void supervisor.stop();
+      if (props.controlPlane !== true) {
+        void supervisor.stop();
+      }
     };
-  }, [props.repo, props.onSupervisor]);
+  }, [props.repo, props.controlPlane, props.onSupervisor]);
 
   useEffect(() => {
     if (props.controlPlane !== true) {
@@ -135,6 +217,11 @@ export function ChatApp(props: Props) {
     const link = startControlPlaneLink({
       enabled: true,
       onState: setConnection,
+      getSharedSupervisor: () => supervisorRef.current,
+      onRemoteTask: ({ prompt, mode: remoteMode }) => {
+        setMode(remoteMode === "build" ? "BUILD" : "PLAN");
+        setLines((current) => [...current, { kind: "user", text: `[castle] ${prompt}` }]);
+      },
     });
     props.onControlPlaneStop?.(link.stop);
     shutdownRef.current = async () => {
@@ -147,6 +234,20 @@ export function ChatApp(props: Props) {
     };
   }, [props.controlPlane, props.onControlPlaneStop]);
 
+  const ensureSupervisorReady = useCallback(async (supervisor: RunSupervisor): Promise<void> => {
+    const current = supervisor.status();
+    if (current !== "idle" && current !== "stopped") {
+      return;
+    }
+    await supervisor.start(props.repo);
+    setStatus(supervisor.status());
+    setRuntime(supervisor.runtimeMode());
+    if (supervisor.repo !== undefined) {
+      setRepo(supervisor.repo.root);
+      setBranch(supervisor.repo.currentBranch ?? "?");
+    }
+  }, [props.repo]);
+
   const submit = useCallback(
     async (value?: string) => {
       const supervisor = supervisorRef.current;
@@ -156,6 +257,7 @@ export function ChatApp(props: Props) {
       }
       setInput("");
       if (text.startsWith("/")) {
+        await ensureSupervisorReady(supervisor);
         await handleSlash(
           supervisor,
           text,
@@ -164,15 +266,17 @@ export function ChatApp(props: Props) {
           setApproval,
           setBranch,
           () => shutdownRef.current?.(),
+          archiveCurrentTranscript,
         );
         setStatus(supervisor.status());
         return;
       }
+      await ensureSupervisorReady(supervisor);
       setLines((current) => [...current, { kind: "user", text }]);
       await supervisor.submitMessage(text);
       setStatus(supervisor.status());
     },
-    [input],
+    [ensureSupervisorReady, input],
   );
 
   return (
@@ -274,6 +378,7 @@ async function handleSlash(
   setApproval: (value: PendingApproval | undefined) => void,
   setBranch: (value: string) => void,
   requestShutdown?: () => void,
+  archiveTranscript?: (supervisor: RunSupervisor) => Promise<string | undefined>,
 ): Promise<void> {
   const [command] = text.split(" ");
   switch (command) {
@@ -297,9 +402,28 @@ async function handleSlash(
         setBranch(supervisor.worktree.branchName);
       }
       return;
-    case "/cancel":
+    case "/cancel": {
+      let archived: string | undefined;
+      let archiveFailed = false;
+      try {
+        archived = await archiveTranscript?.(supervisor);
+      } catch {
+        archiveFailed = true;
+      }
       await supervisor.cancel();
+      setLines([
+        {
+          kind: "system",
+          text: archiveFailed
+            ? "Run cancelled. Transcript archive failed — see stderr for details."
+            : archived !== undefined
+              ? `Run cancelled. Transcript archived to ${archived}`
+              : "Run cancelled.",
+        },
+        { kind: "system", text: "What would you like to build?" },
+      ]);
       return;
+    }
     case "/status":
       setLines((current) => [
         ...current,
@@ -336,13 +460,22 @@ async function handleSlash(
       ]);
       return;
     }
-    case "/new":
+    case "/new": {
+      const archived = await archiveTranscript?.(supervisor);
       await supervisor.startNewConversation();
-      setLines((current) => [
-        ...current,
+      setLines([
+        {
+          kind: "system",
+          text:
+            archived !== undefined
+              ? `Transcript archived to ${archived}`
+              : "Starting a fresh harness session.",
+        },
         { kind: "system", text: `new session ${supervisor.sessionId ?? "none"}` },
+        { kind: "system", text: "What would you like to build?" },
       ]);
       return;
+    }
     case "/models": {
       const client = createAgentClient(loadTrueforgeConfig());
       const models = await listAvailableModels(client);
@@ -398,7 +531,13 @@ async function handleSlash(
     case "/pr": {
       const title = text.slice("/pr".length).trim() || "ClanCode task";
       await supervisor.createPr(title, true);
-      setLines((current) => [...current, { kind: "system", text: `pull request: ${title}` }]);
+      setLines((current) => [
+        ...current,
+        {
+          kind: "system",
+          text: `Opening pull request for ${supervisor.repo?.root ?? "repository"} (${supervisor.worktree?.branchName ?? "task branch"})…`,
+        },
+      ]);
       return;
     }
     case "/exit":

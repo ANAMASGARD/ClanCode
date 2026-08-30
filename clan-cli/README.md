@@ -5,10 +5,19 @@ or fork it. Users run `clancode`.
 
 ```bash
 clancode                 # interactive OpenTUI harness
+clancode login           # pair or re-pair with the web control plane (switch Clerk account)
 clancode run "task"      # headless (same run supervisor)
 clancode doctor [--json]
 clancode --version
 clancode --help
+```
+
+From the `clan-cli/` workspace during development:
+
+```bash
+bun run login            # same as clancode login
+bun run cli login        # explicit CLI entrypoint
+bun run dev:clan         # interactive harness
 ```
 
 ## Requirements

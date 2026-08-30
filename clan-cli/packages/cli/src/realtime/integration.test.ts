@@ -16,51 +16,73 @@ import type { TrueforgeConfig } from "../trueforge/config.ts";
 class FakeSupervisor implements ConnectSupervisor {
   readonly runId: string;
   readonly pendingApprovals: Array<{ toolCallId: string }>;
-  #status: string;
+  readonly worktree: { worktreePath: string; branchName: string } | undefined;
+  mode: "plan" | "build";
+  protected runStatus: string;
   #handlers: Array<(event: RunEvent) => void> = [];
+  #sequence = 0;
 
-  constructor(status = "idle") {
+  constructor(status = "idle", options?: { mode?: "plan" | "build"; worktree?: { worktreePath: string; branchName: string } }) {
     this.runId = `run-${crypto.randomUUID()}`;
-    this.#status = status;
+    this.runStatus = status;
     this.pendingApprovals = [{ toolCallId: "call-approval-1" }];
+    this.mode = options?.mode ?? "plan";
+    this.worktree = options?.worktree;
   }
 
   status(): string {
-    return this.#status;
+    return this.runStatus;
   }
 
   async start(_repositoryPath: string): Promise<void> {
-    this.#status = "streaming";
+    this.runStatus = "streaming";
     this.#emit(
       createRunEvent({
         runId: this.runId,
-        sequence: 1,
+        sequence: this.#nextSequence(),
         type: "run.started",
         payload: {
           baseUrl: "http://127.0.0.1:secret",
           repositoryPath: "/home/user/secret-repo",
-          mode: "plan",
+          mode: "spawned",
         },
       }),
     );
   }
 
-  async setMode(_mode: "plan" | "build"): Promise<void> {}
+  async setMode(mode: "plan" | "build"): Promise<void> {
+    this.mode = mode;
+  }
 
   async submitMessage(_prompt: string): Promise<void> {
-    this.#status = "streaming";
+    this.runStatus = "streaming";
   }
 
   async stop(): Promise<void> {
-    this.#status = "stopped";
+    this.runStatus = "stopped";
   }
 
   async cancel(): Promise<void> {
-    this.#status = "cancelled";
+    this.runStatus = "cancelled";
   }
 
   async resolveApproval(_allow: boolean): Promise<void> {
-    this.#status = "streaming";
+    this.runStatus = "streaming";
+  }
+
+  async commit(_message: string, _approved: boolean): Promise<void> {}
+
+  async push(_approved: boolean): Promise<void> {}
+
+  async createPr(_title: string, _approved: boolean): Promise<void> {
+    this.#emit(
+      createRunEvent({
+        runId: this.runId,
+        sequence: this.#nextSequence(),
+        type: "pr.created",
+        payload: { url: "https://github.com/org/repo/pull/1", number: 1, branch: "clancode/task" },
+      }),
+    );
   }
 
   subscribe(handler: (event: RunEvent) => void): () => void {
@@ -68,6 +90,23 @@ class FakeSupervisor implements ConnectSupervisor {
     return () => {
       this.#handlers = this.#handlers.filter((item) => item !== handler);
     };
+  }
+
+  complete(payload: Record<string, unknown> = {}): void {
+    this.runStatus = "completed";
+    this.#emit(
+      createRunEvent({
+        runId: this.runId,
+        sequence: this.#nextSequence(),
+        type: "run.completed",
+        payload,
+      }),
+    );
+  }
+
+  #nextSequence(): number {
+    this.#sequence += 1;
+    return this.#sequence;
   }
 
   #emit(event: RunEvent): void {
@@ -208,6 +247,7 @@ describe("ConnectSession realtime integration", () => {
     const projected = runEvent?.payload?.event?.payload ?? {};
     expect(projected.baseUrl).toBeUndefined();
     expect(projected.repositoryPath).toBeUndefined();
+    expect(projected.mode).toBeUndefined();
 
     await session.stop(client);
   });
@@ -373,9 +413,10 @@ describe("ConnectSession realtime integration", () => {
     await session.stop(client);
   });
 
-  test("task.start failure after accept emits run.failed not contradictory ACK", async () => {
+  test("task.start failure after accept does not rewrite ACK", async () => {
     class LateFailSupervisor extends FakeSupervisor {
       override async submitMessage(_prompt: string): Promise<void> {
+        this.complete();
         throw new Error("submit failed");
       }
     }
@@ -396,13 +437,6 @@ describe("ConnectSession realtime integration", () => {
     ) as Array<{ payload?: { status?: string } }>;
     expect(acks.some((item) => item.payload?.status === "accepted")).toBe(true);
     expect(acks.some((item) => item.payload?.status === "rejected")).toBe(false);
-
-    const failed = clientEvents.find(
-      (item) =>
-        (item as { type?: string }).type === "run.event" &&
-        (item as { payload?: { event?: { type?: string } } }).payload?.event?.type === "run.failed",
-    );
-    expect(failed).toBeDefined();
     await session.stop(client);
   });
 
@@ -433,6 +467,193 @@ describe("ConnectSession realtime integration", () => {
         (item as { payload?: { commandId?: string } }).payload?.commandId === resolve.commandId,
     ) as { payload?: { status?: string } } | undefined;
     expect(ack?.payload?.status).toBe("accepted");
+    await session.stop(client);
+  });
+
+  test("task.start ignores browser repositoryPath", async () => {
+    const startedWith: string[] = [];
+    class CaptureSupervisor extends FakeSupervisor {
+      override async start(repositoryPath: string): Promise<void> {
+        startedWith.push(repositoryPath);
+        await super.start(repositoryPath);
+      }
+    }
+    const supervisor = new CaptureSupervisor();
+    const { session, client } = await startSession({ supervisor });
+    const start = command({
+      type: "task.start",
+      payload: { repositoryPath: "/tmp/evil-repo", prompt: "inspect" },
+    });
+    deviceSocket?.emit("command", start);
+    await Bun.sleep(50);
+    expect(startedWith.length).toBe(1);
+    expect(startedWith[0]).not.toBe("/tmp/evil-repo");
+    expect(startedWith[0]?.includes("secret-repo")).toBe(false);
+    await session.stop(client);
+  });
+
+  test("task.start without prompt is invalid", async () => {
+    const { session, client } = await startSession();
+    const start = command({
+      type: "task.start",
+      payload: { repositoryPath: "/tmp/repo" },
+    });
+    deviceSocket?.emit("command", start);
+    await Bun.sleep(50);
+    const ack = clientEvents.find(
+      (item) =>
+        (item as { type?: string }).type === "command.ack" &&
+        (item as { payload?: { commandId?: string } }).payload?.commandId === start.commandId,
+    ) as { payload?: { status?: string; reason?: string } } | undefined;
+    expect(ack?.payload?.status).toBe("rejected");
+    expect(ack?.payload?.reason).toBe("invalid");
+    await session.stop(client);
+  });
+
+  test("cancel is accepted while submitMessage is in flight", async () => {
+    class HangingSupervisor extends FakeSupervisor {
+      override async submitMessage(_prompt: string): Promise<void> {
+        this.runStatus = "streaming";
+        await new Promise(() => undefined);
+      }
+    }
+    const supervisor = new HangingSupervisor();
+    const { session, client } = await startSession({ supervisor });
+    const start = command({
+      type: "task.start",
+      payload: { prompt: "hang" },
+    });
+    deviceSocket?.emit("command", start);
+    await Bun.sleep(50);
+    const cancel = command({
+      type: "task.cancel",
+      payload: { runId: supervisor.runId },
+    });
+    deviceSocket?.emit("command", cancel);
+    await Bun.sleep(50);
+    const ack = clientEvents.find(
+      (item) =>
+        (item as { type?: string }).type === "command.ack" &&
+        (item as { payload?: { commandId?: string } }).payload?.commandId === cancel.commandId,
+    ) as { payload?: { status?: string } } | undefined;
+    expect(ack?.payload?.status).toBe("accepted");
+    expect(supervisor.status()).toBe("cancelled");
+    await session.stop(client);
+  });
+
+  test("cancel is accepted while approval continuation is in flight", async () => {
+    class SlowApprovalSupervisor extends FakeSupervisor {
+      override async resolveApproval(_allow: boolean): Promise<void> {
+        this.runStatus = "streaming";
+        await new Promise(() => undefined);
+      }
+    }
+    const supervisor = new SlowApprovalSupervisor();
+    const { session, client } = await startSession({ supervisor });
+    const start = command({
+      type: "task.start",
+      payload: { prompt: "approve hang" },
+    });
+    deviceSocket?.emit("command", start);
+    await Bun.sleep(50);
+    const resolve = command({
+      type: "approval.resolve",
+      payload: { runId: supervisor.runId, toolCallId: "call-approval-1", allow: true },
+    });
+    deviceSocket?.emit("command", resolve);
+    await Bun.sleep(50);
+    const cancel = command({
+      type: "task.cancel",
+      payload: { runId: supervisor.runId },
+    });
+    deviceSocket?.emit("command", cancel);
+    await Bun.sleep(50);
+    const ack = clientEvents.find(
+      (item) =>
+        (item as { type?: string }).type === "command.ack" &&
+        (item as { payload?: { commandId?: string } }).payload?.commandId === cancel.commandId,
+    ) as { payload?: { status?: string } } | undefined;
+    expect(ack?.payload?.status).toBe("accepted");
+    await session.stop(client);
+  });
+
+  test("duplicate approval while continuation is in flight is busy", async () => {
+    class SlowApprovalSupervisor extends FakeSupervisor {
+      override async resolveApproval(_allow: boolean): Promise<void> {
+        this.runStatus = "streaming";
+        await new Promise(() => undefined);
+      }
+    }
+    const supervisor = new SlowApprovalSupervisor();
+    const { session, client } = await startSession({ supervisor });
+    const start = command({
+      type: "task.start",
+      payload: { prompt: "dup approve" },
+    });
+    deviceSocket?.emit("command", start);
+    await Bun.sleep(50);
+    const first = command({
+      type: "approval.resolve",
+      payload: { runId: supervisor.runId, toolCallId: "call-approval-1", allow: true },
+    });
+    const second = command({
+      type: "approval.resolve",
+      payload: { runId: supervisor.runId, toolCallId: "call-approval-1", allow: false },
+    });
+    deviceSocket?.emit("command", first);
+    await Bun.sleep(30);
+    deviceSocket?.emit("command", second);
+    await Bun.sleep(50);
+    const secondAck = clientEvents.find(
+      (item) =>
+        (item as { type?: string }).type === "command.ack" &&
+        (item as { payload?: { commandId?: string } }).payload?.commandId === second.commandId,
+    ) as { payload?: { status?: string; reason?: string } } | undefined;
+    expect(secondAck?.payload?.status).toBe("rejected");
+    expect(secondAck?.payload?.reason).toBe("busy");
+    await session.stop(client);
+  });
+
+  test("delivery.create_pr requires retained completed build", async () => {
+    const supervisor = new FakeSupervisor("idle", {
+      mode: "build",
+      worktree: { worktreePath: "/tmp/wt", branchName: "clancode/task" },
+    });
+    const { session, client } = await startSession({ supervisor });
+    const start = command({
+      type: "task.start",
+      payload: { prompt: "deliver", mode: "build" },
+    });
+    deviceSocket?.emit("command", start);
+    await Bun.sleep(50);
+    const tooEarly = command({
+      type: "delivery.create_pr",
+      payload: { runId: supervisor.runId },
+    });
+    deviceSocket?.emit("command", tooEarly);
+    await Bun.sleep(50);
+    const earlyAck = clientEvents.find(
+      (item) =>
+        (item as { type?: string }).type === "command.ack" &&
+        (item as { payload?: { commandId?: string } }).payload?.commandId === tooEarly.commandId,
+    ) as { payload?: { status?: string; reason?: string } } | undefined;
+    expect(earlyAck?.payload?.status).toBe("rejected");
+    expect(earlyAck?.payload?.reason).toBe("busy");
+
+    supervisor.complete();
+    await Bun.sleep(30);
+    const deliver = command({
+      type: "delivery.create_pr",
+      payload: { runId: supervisor.runId, title: "Demo PR" },
+    });
+    deviceSocket?.emit("command", deliver);
+    await Bun.sleep(50);
+    const deliverAck = clientEvents.find(
+      (item) =>
+        (item as { type?: string }).type === "command.ack" &&
+        (item as { payload?: { commandId?: string } }).payload?.commandId === deliver.commandId,
+    ) as { payload?: { status?: string } } | undefined;
+    expect(deliverAck?.payload?.status).toBe("accepted");
     await session.stop(client);
   });
 });
