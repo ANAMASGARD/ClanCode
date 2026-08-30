@@ -1,6 +1,6 @@
 # ClanCode — Project Memory
 
-**Last updated:** 2026-08-30 (video landing hero, Qodo harness fixes, session logs, construction viz)
+**Last updated:** 2026-08-30 (hackathon README/docs, video landing hero, Qodo harness fixes)
 
 ## What This Repo Is
 
@@ -99,6 +99,22 @@ GramSarthi-inspired full-viewport hero using `public/video/Clan-Code-Hero.mp4`:
 - `drizzle/0003_clan_run_session_logs.sql` + `0004_clan_run_session_logs_idx.sql` (Neon requires one statement per migration file)
 
 Apply: `bun run db:migrate`
+
+### Hackathon documentation (2026-08-30)
+
+Judge-ready docs at repo root and `docs/`:
+
+| File | Purpose |
+|------|---------|
+| `README.md` | Product story, setup, TrueForge, Qodo evidence, demo link |
+| `docs/quickstart.md` | Clone → three terminals |
+| `docs/demo.md` | Two-run approval demo script |
+| `docs/troubleshooting.md` | Common operational failures |
+| `docs/local-cli-from-source.md` | `--repo` semantics (critical for demo) |
+
+Demo video: https://youtu.be/istUU5onLCI
+
+`@clancode/cli@0.1.0-beta.1` published on npm under dist-tag **`next`**. Install: `npm install -g @clancode/cli@next`.
 
 ### Validation (2026-08-30)
 

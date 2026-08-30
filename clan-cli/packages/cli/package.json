@@ -1,14 +1,27 @@
 {
   "name": "@clancode/cli",
   "version": "0.1.0-beta.1",
-  "description": "Local-first TrueForge-supervised AI coding harness",
+  "description": "Local-first TrueForge-supervised AI coding harness — pair with the ClanCode web control plane, run agents in isolated Git worktrees, enforce approvals, validate, and open PRs from your machine.",
   "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "author": "ANAMASGARD",
+  "keywords": [
+    "clancode",
+    "trueforge",
+    "ai-coding",
+    "coding-agent",
+    "cli",
+    "local-first",
+    "agent-harness",
+    "developer-tools"
+  ],
   "bin": {
-    "clancode": "./dist/cli.js"
+    "clancode": "dist/cli.js"
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "dev": "bun run --watch src/main.tsx",
@@ -41,14 +54,12 @@
   "bugs": {
     "url": "https://github.com/ANAMASGARD/ClanCode/issues"
   },
+  "packageManager": "bun@1.4.0",
   "devDependencies": {
     "@types/bun": "latest",
     "@types/react": "^19.2.18",
     "socket.io": "^4.8.3",
     "typescript": "^5.9.2"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
   },
   "dependencies": {
     "@opentui/core": "^0.5.6",
@@ -59,6 +70,7 @@
     "socket.io-client": "^4.8.3"
   },
   "engines": {
-    "node": ">=22.14.0"
+    "node": ">=22.14.0",
+    "bun": ">=1.4.0"
   }
 }

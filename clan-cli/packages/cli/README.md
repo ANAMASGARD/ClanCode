@@ -1,76 +1,100 @@
 # ClanCode CLI
 
-Local-first TrueForge-supervised AI coding harness for your laptop.
+[![npm version](https://img.shields.io/npm/v/@clancode/cli?label=npm&color=CB3837)](https://www.npmjs.com/package/@clancode/cli)
 
-ClanCode **wraps TrueForge** — it does not replace the agent runtime. The CLI owns repository authorization, worktrees, local tools, approvals, validation, Git/PR delivery, and the terminal UI.
+Local-first **TrueForge**-supervised AI coding harness for your laptop.
+
+ClanCode **wraps TrueForge** — it does not replace the agent runtime. The CLI owns repository authorization, isolated worktrees, local tools, human approvals, validation, Git/PR delivery, and the OpenTUI terminal UI.
+
+> **Beta:** install with the `@next` dist-tag until a stable release is promoted.
+
+## Requirements
+
+| Requirement | Why |
+|-------------|-----|
+| **[Bun](https://bun.sh) >= 1.4** | The `clancode` binary runs on Bun (`#!/usr/bin/env bun`). **`npm install -g` does not install Bun.** |
+| **Node.js >= 22.14** | TrueForge runtime |
+| **Git** | Repository resolution, worktrees, PR workflow |
+| **TrueForge model** | Configure in TrueForge UI (`http://localhost:8790`) or set `CLAN_TRUEFORGE_MODEL` |
 
 ## Install
 
-Requires **Bun** for the CLI binary and **Node >= 22.14** for TrueForge.
-
 ```bash
-npm install -g @clancode/cli
-# or
-bun add -g @clancode/cli
+npm install -g @clancode/cli@next
 ```
 
-Then run:
+Or with Bun:
 
 ```bash
-clancode
+bun add -g @clancode/cli@next
+```
+
+Then:
+
+```bash
 clancode --help
 clancode doctor
+clancode
+```
+
+Pair once with the [ClanCode web control plane](https://github.com/ANAMASGARD/ClanCode):
+
+```bash
+clancode login
 ```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `clancode` | Interactive OpenTUI chat (default) |
-| `clancode run <repo>` | Non-interactive run in a repository |
-| `clancode doctor [--json]` | Environment and TrueForge readiness checks |
-| `clancode connect` | Long-lived Socket.IO client for the future web control plane |
+| `clancode` | Interactive OpenTUI harness (auto-connects when paired) |
+| `clancode --offline --repo PATH` | Local harness without web pairing |
+| `clancode run "task" [--repo PATH] [--mode build]` | Headless run |
+| `clancode login` / `clancode pair` | Pair this laptop with the web control plane |
+| `clancode connect` | Long-lived Socket.IO client |
+| `clancode new [--repo PATH]` | Fresh TrueForge session |
+| `clancode models` / `clancode model <name>` | List / select TrueForge model |
+| `clancode doctor [--json]` | Environment diagnostics (never prints secrets) |
 
-### Chat slash commands
+Run from the **Git repository you want the agent to work on**, or pass `--repo /absolute/path`.
 
-- `/new` — start a fresh TrueForge session
-- `/models` — list configured TrueForge models
-- `/model <name>` — persist preferred model
-- `/sessions` — list resumable local sessions
-- `/resume [id]` — resume newest or a specific session
+### TUI slash commands
+
+`/plan`, `/build`, `/new`, `/cancel`, `/status`, `/diff`, `/validate`, `/sessions`, `/resume`, `/models`, `/model`, `/approve`, `/deny`, `/commit`, `/push`, `/pr`, `/doctor`, `/exit`
 
 ## Configuration
 
 | Variable | Purpose |
 |----------|---------|
-| `CLAN_TRUEFORGE_URL` | Attach to an existing TrueForge server |
-| `CLAN_TRUEFORGE_MODEL` | Override model selection |
-| `CLANCODE_DEVICE_TOKEN` | Device credential for `clancode connect` |
-| `CLANCODE_CONTROL_URL` | Control-plane Socket.IO URL for `clancode connect` |
-| `XDG_STATE_HOME` | Override state directory (sessions, preferences, command journal) |
+| `CLAN_TRUEFORGE_MODEL` | Override TrueForge model selection |
+| `TRUEFORGE_BASE_URL` / `TRUEFORGE_PORT` | Attach to existing TrueForge (loopback only) |
+| `CLAN_NODE_BIN` | Node binary for TrueForge spawn (default `node`) |
+| `CLANCODE_DEVICE_TOKEN` + `CLANCODE_CONTROL_URL` + `CLANCODE_DEVICE_ID` | Full env override for control-plane connect |
+| `XDG_STATE_HOME` | Override state dir (sessions, credentials, command journal) |
 
-State is stored under `$XDG_STATE_HOME/clancode/` (default `~/.local/state/clancode/`).
+State defaults to `$XDG_STATE_HOME/clancode/` (`~/.local/state/clancode/`).
 
 ## Architecture
 
-```
-Future website ← Socket.IO → clancode connect → RunSupervisor → TrueForge → repo/worktree
+```text
+ClanCode web (control plane) ←Socket.IO→ clancode CLI → RunSupervisor → TrueForge → worktree
 ```
 
-The website never talks to TrueForge directly. Sensitive laptop paths, tokens, and raw tool output stay local; outbound events use an allowlisted projection.
+The website never executes repository tools. Outbound events are allowlisted; secrets and raw paths stay local.
+
+Full setup (web + gateway + three terminals): [ClanCode README](https://github.com/ANAMASGARD/ClanCode#-run-clancode-locally).
 
 ## Development
 
-From the repository `clan-cli/` workspace:
+From the monorepo `clan-cli/` workspace:
 
 ```bash
-bun install --ignore-scripts
-bun run --cwd packages/cli dev
-bun run --cwd packages/cli test
+bun install
 bun run --cwd packages/cli typecheck
+bun run --cwd packages/cli test
 bun run --cwd packages/cli pack:local
 ```
 
 ## License
 
-No license is bundled yet. Choose and add a license before npm publication.
+**AGPL-3.0-or-later** — see [LICENSE](./LICENSE). Modifiers who run modified versions as a network service must offer corresponding source to users, per the Affero GPL.
